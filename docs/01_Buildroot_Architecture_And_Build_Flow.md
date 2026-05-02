@@ -1,4 +1,4 @@
-The document covers all aspects of the topic across 12 sections:
+# 01. Buildroot Architecture & Build Flow
 
 **Structure at a glance:**
 
@@ -14,7 +14,6 @@ The document covers all aspects of the topic across 12 sections:
 - **Advanced hooks** — post-extract/build/install hooks, rootfs overlays, post-build and post-image shell scripts
 - **Summary** — a full ASCII box summary of the entire flow, package types, and essential commands
 
-# 01. Buildroot Architecture & Build Flow
 
 > How Buildroot orchestrates downloads, extraction, patching, configuration,
 > compilation and installation in stages; understanding `make` internals,
@@ -65,27 +64,27 @@ distribution for you.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        BUILDROOT SOURCE TREE                        │
 │                                                                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  ┌───────┐  │
-│  │  arch/   │  │ package/ │  │  board/  │  │ boot/  │  │  fs/  │  │
-│  │ (CPU     │  │ (3000+   │  │ (vendor  │  │(U-Boot │  │(ext4, │  │
-│  │ options) │  │ pkgs)    │  │ configs) │  │ GRUB…) │  │ squash│  │
-│  └──────────┘  └──────────┘  └──────────┘  └────────┘  └───────┘  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  ┌───────┐    │
+│  │  arch/   │  │ package/ │  │  board/  │  │ boot/  │  │  fs/  │    │
+│  │ (CPU     │  │ (3000+   │  │ (vendor  │  │(U-Boot │  │(ext4, │    │
+│  │ options) │  │ pkgs)    │  │ configs) │  │ GRUB…) │  │ squash│    │
+│  └──────────┘  └──────────┘  └──────────┘  └────────┘  └───────┘    │
 │                                                                     │
-│  ┌──────────┐  ┌──────────┐  ┌───────────────────────────────────┐ │
-│  │ toolchain│  │ system/  │  │            Kconfig / .config       │ │
-│  │(internal │  │(init,    │  │  (BR2_ARCH, BR2_PACKAGE_*, etc.)  │ │
-│  │ or       │  │ skeleton)│  └───────────────────────────────────┘ │
-│  │ external)│  └──────────┘                                        │
-│  └──────────┘                                                      │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────────────────────┐  │
+│  │ toolchain│  │ system/  │  │            Kconfig / .config      │  │
+│  │(internal │  │(init,    │  │  (BR2_ARCH, BR2_PACKAGE_*, etc.)  │  │
+│  │ or       │  │ skeleton)│  └───────────────────────────────────┘  │
+│  │ external)│  └──────────┘                                         │
+│  └──────────┘                                                       │
 └─────────────────────────────────────────────────────────────────────┘
                               │  make
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          output/                                     │
+│                          output/                                    │
 │                                                                     │
-│   build/        host/        staging/      target/      images/    │
-│  (per-pkg       (host        (sysroot)     (rootfs      (kernel,   │
-│   build dirs)   tools)                    skeleton)     dtb, fs)   │
+│   build/        host/        staging/      target/      images/     │
+│  (per-pkg       (host        (sysroot)     (rootfs      (kernel,    │
+│   build dirs)   tools)                    skeleton)     dtb, fs)    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -98,25 +97,25 @@ Each stage is represented by a Make target suffix:
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│                    PACKAGE BUILD PIPELINE                                  │
-│                                                                            │
-│  ┌──────────┐    ┌───────────┐    ┌─────────┐    ┌──────────────────────┐│
-│  │ DOWNLOAD │───▶│  EXTRACT  │───▶│  PATCH  │───▶│   CONFIGURE          ││
-│  │          │    │           │    │         │    │ (cmake/autoconf/      ││
-│  │ wget/hg/ │    │ tar/unzip │    │ *.patch │    │  meson/custom)        ││
-│  │ git/svn  │    │ to build/ │    │ applied │    │                       ││
-│  └──────────┘    └───────────┘    └─────────┘    └──────────────────────┘│
+│                    PACKAGE BUILD PIPELINE                                 │
+│                                                                           │
+│  ┌──────────┐    ┌───────────┐    ┌─────────┐    ┌──────────────────────┐ │
+│  │ DOWNLOAD │───▶│  EXTRACT  │───▶│  PATCH  │───▶│   CONFIGURE          │ │
+│  │          │    │           │    │         │    │ (cmake/autoconf/     │ │
+│  │ wget/hg/ │    │ tar/unzip │    │ *.patch │    │  meson/custom)       │ │
+│  │ git/svn  │    │ to build/ │    │ applied │    │                      │ │
+│  └──────────┘    └───────────┘    └─────────┘    └──────────────────────┘ │
 │        │                                                   │              │
 │        ▼                                                   ▼              │
-│  dl/pkg.tar.gz                                    build/pkg-ver/         │
-│                                                   Makefile (configured)  │
-│                                                                            │
-│  ┌──────────┐    ┌───────────┐    ┌─────────────────────────────────────┐│
-│  │  BUILD   │───▶│  INSTALL  │───▶│    INSTALL TO TARGET / STAGING      ││
-│  │          │    │  (host    │    │                                      ││
-│  │ cross-   │    │  tools    │    │  staging/ ──▶ sysroot for next pkg  ││
-│  │ compile  │    │  only)    │    │  target/  ──▶ final rootfs           ││
-│  └──────────┘    └───────────┘    └─────────────────────────────────────┘│
+│  dl/pkg.tar.gz                                    build/pkg-ver/          │
+│                                                   Makefile (configured)   │
+│                                                                           │
+│  ┌──────────┐    ┌───────────┐    ┌─────────────────────────────────────┐ │
+│  │  BUILD   │───▶│  INSTALL  │───▶│    INSTALL TO TARGET / STAGING      │ │
+│  │          │    │  (host    │    │                                     │ │
+│  │ cross-   │    │  tools    │    │  staging/ ──▶ sysroot for next pkg  │ │
+│  │ compile  │    │  only)    │    │  target/  ──▶ final rootfs          │ │
+│  └──────────┘    └───────────┘    └─────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -172,13 +171,13 @@ Buildroot delegates configuration to the package's own build system:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                 CONFIGURE STRATEGIES                      │
+│                 CONFIGURE STRATEGIES                     │
 │                                                          │
-│  Autotools  ──▶  ./configure --host=arm-linux-...       │
-│  CMake      ──▶  cmake -DCMAKE_TOOLCHAIN_FILE=...       │
+│  Autotools  ──▶  ./configure --host=arm-linux-...        │
+│  CMake      ──▶  cmake -DCMAKE_TOOLCHAIN_FILE=...        │
 │  Meson      ──▶  meson --cross-file=...                  │
-│  Kconfig    ──▶  make ARCH=arm menuconfig (e.g. Linux)  │
-│  Generic    ──▶  custom CONFIGURE_CMDS in .mk file      │
+│  Kconfig    ──▶  make ARCH=arm menuconfig (e.g. Linux)   │
+│  Generic    ──▶  custom CONFIGURE_CMDS in .mk file       │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -1277,22 +1276,22 @@ fi
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║              BUILDROOT ARCHITECTURE & BUILD FLOW — SUMMARY                  ║
+║              BUILDROOT ARCHITECTURE & BUILD FLOW — SUMMARY                   ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  INPUT                          PIPELINE                   OUTPUT            ║
 ║  ─────                          ────────                   ──────            ║
 ║                                                                              ║
-║  .config ──────────────▶  ┌─────────────────────┐                           ║
-║  (BR2_* variables)         │  1. DOWNLOAD        │──▶ dl/                   ║
-║                            │  2. EXTRACT         │──▶ build/<pkg>/          ║
-║  package/*/                │  3. PATCH           │──▶ build/<pkg>/ (patched)║
-║  ├── Config.in             │  4. CONFIGURE       │──▶ build/<pkg>/Makefile  ║
-║  ├── *.mk                  │  5. BUILD           │──▶ build/<pkg>/binary    ║
-║  └── *.hash                │  6. INSTALL STAGING │──▶ staging/              ║
-║                            │  7. INSTALL TARGET  │──▶ target/               ║
-║  board/*/                  │  8. FS IMAGE        │──▶ images/               ║
-║  ├── rootfs-overlay/       └─────────────────────┘                          ║
+║  .config ──────────────▶  ┌─────────────────────┐                            ║
+║  (BR2_* variables)         │  1. DOWNLOAD        │──▶ dl/                    ║
+║                            │  2. EXTRACT         │──▶ build/<pkg>/           ║
+║  package/*/                │  3. PATCH           │──▶ build/<pkg>/ (patched) ║
+║  ├── Config.in             │  4. CONFIGURE       │──▶ build/<pkg>/Makefile   ║
+║  ├── *.mk                  │  5. BUILD           │──▶ build/<pkg>/binary     ║
+║  └── *.hash                │  6. INSTALL STAGING │──▶ staging/               ║
+║                            │  7. INSTALL TARGET  │──▶ target/                ║
+║  board/*/                  │  8. FS IMAGE        │──▶ images/                ║
+║  ├── rootfs-overlay/       └─────────────────────┘                           ║
 ║  ├── post-build.sh                                                           ║
 ║  └── post-image.sh                                                           ║
 ║                                                                              ║
@@ -1302,7 +1301,7 @@ fi
 ║  • Stamp files  ──  avoid re-running completed stages                        ║
 ║  • Kconfig      ──  BR2_* variables drive every build decision               ║
 ║  • Sysroot      ──  output/staging/ for compilation, target/ for rootfs      ║
-║  • Infra macros ──  $(eval $(cmake-package)) generates all Make rules         ║
+║  • Infra macros ──  $(eval $(cmake-package)) generates all Make rules        ║
 ║  • Hooks        ──  POST_EXTRACT / POST_BUILD / POST_INSTALL customisation   ║
 ║  • Overlays     ──  rootfs-overlay/ overlays target/ verbatim                ║
 ║  • BR2_EXTERNAL ──  out-of-tree packages & board configs                     ║
