@@ -1,4 +1,4 @@
-Now let me create the comprehensive markdown document:Here's your complete Chapter 12 document. It covers all the requested topics in depth:
+# 12. Bootloader Integration (U-Boot & GRUB2)
 
 **Structure of the document:**
 
@@ -14,7 +14,6 @@ Now let me create the comprehensive markdown document:Here's your complete Chapt
 - **Advanced section** — secure boot signing flow (ASCII), U-Boot A/B boot script, eMMC flash layout diagram
 - **Summary** — concise prose covering all major concepts
 
-# Chapter 12: Bootloader Integration (U-Boot & GRUB2)
 
 > **Buildroot Series** | Embedded Linux Build System  
 > Topic: U-Boot defconfig, SPL/TPL stages, FIT images, `BR2_TARGET_UBOOT_*` variables, and GRUB2 for x86 embedded targets.
@@ -578,7 +577,7 @@ x86 Disk Image (MBR / GPT + GRUB2)
 |           - (GPT only — needs special partition  |
 |              type GUID: 21686148-...)            |
 +--------------------------------------------------+
-| LBA 2048+  Partition 1: /boot or / (ext4/FAT32) |
+| LBA 2048+  Partition 1: /boot or / (ext4/FAT32)  |
 |           - /boot/grub/grub.cfg                  |
 |           - /boot/grub/grub.env                  |
 |           - vmlinuz / bzImage                    |
@@ -1883,7 +1882,7 @@ mod tests {
   |  1. Generate RSA key pair                               |
   |     $ openssl genrsa -out dev.key 2048                  |
   |     $ openssl req -batch -new -x509 -key dev.key \      |
-  |           -out dev.crt                                   |
+  |           -out dev.crt                                  |
   |                                                         |
   |  2. Build U-Boot with public key embedded               |
   |     BR2_TARGET_UBOOT_SIGN=y                             |
@@ -1892,9 +1891,9 @@ mod tests {
   |     → mkimage embeds dev.crt into u-boot.dtb            |
   |                                                         |
   |  3. Sign FIT image at build time                        |
-  |     $ mkimage -F -k keys/ -K u-boot.dtb \              |
+  |     $ mkimage -F -k keys/ -K u-boot.dtb \               |
   |           -r boot.itb                                   |
-  |     → RSA signature added to /configurations/conf@1/   |
+  |     → RSA signature added to /configurations/conf@1/    |
   |       signature@1 node                                  |
   +---------------------------------------------------------+
               |                         |
@@ -1911,10 +1910,10 @@ mod tests {
                          v  v
                   Target Device Flash
   +-----------------------------------------------------------+
-  |  U-Boot verifies boot.itb signature against public key   |
-  |  embedded in its own compiled-in DTB at boot time        |
-  |                                                          |
-  |  If signature check fails → BOOT HALTED                  |
+  |  U-Boot verifies boot.itb signature against public key    |
+  |  embedded in its own compiled-in DTB at boot time         |
+  |                                                           |
+  |  If signature check fails → BOOT HALTED                   |
   +-----------------------------------------------------------+
 ```
 

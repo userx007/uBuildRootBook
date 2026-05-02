@@ -1,4 +1,4 @@
-Now I have the skill details. Let me create the comprehensive markdown document.The document covers the full topic across 11 sections. Here's what's inside:
+# 05. Buildroot Package Infrastructures
 
 **Structure**
 
@@ -14,7 +14,6 @@ Now I have the skill details. Let me create the comprehensive markdown document.
 10. **Practical Decision Guide** — ASCII flowchart for choosing the right infrastructure
 11. **Summary** — quick-reference table and six key takeaways with a final ASCII directory layout diagram
 
-# 05. Buildroot Package Infrastructures
 
 ## `autotools-package` · `cmake-package` · `meson-package` · `generic-package`
 
@@ -77,9 +76,9 @@ ASCII: Buildroot Package Lifecycle
 
 ```
 ┌─────────────────────┬───────────────────┬──────────────────────────────────────┐
-│ Infrastructure      │ Upstream uses      │ Typical trigger files                │
+│ Infrastructure      │ Upstream uses     │ Typical trigger files                │
 ├─────────────────────┼───────────────────┼──────────────────────────────────────┤
-│ autotools-package   │ Autoconf/Automake  │ configure.ac, configure, Makefile.am │
+│ autotools-package   │ Autoconf/Automake │ configure.ac, configure, Makefile.am │
 │ cmake-package       │ CMake             │ CMakeLists.txt                       │
 │ meson-package       │ Meson + Ninja     │ meson.build                          │
 │ generic-package     │ Anything else     │ custom Makefile, SCons, hand-rolled  │
@@ -399,13 +398,13 @@ endef
       ▼
   cmake-package macro
   ┌────────────────────────────────────────────────────────────────┐
-  │  configure:  cmake -S $(@D) -B $(@D)/buildroot-build          │
+  │  configure:  cmake -S $(@D) -B $(@D)/buildroot-build           │
   │                    -DCMAKE_TOOLCHAIN_FILE=<generated>          │
   │                    -DCMAKE_INSTALL_PREFIX=/usr                 │
   │                    $(LIBBAR_CONF_OPTS)                         │
-  │  build:      cmake --build $(@D)/buildroot-build              │
-  │  install:    cmake --install … --destdir $(STAGING_DIR)       │
-  │              cmake --install … --destdir $(TARGET_DIR)        │
+  │  build:      cmake --build $(@D)/buildroot-build               │
+  │  install:    cmake --install … --destdir $(STAGING_DIR)        │
+  │              cmake --install … --destdir $(TARGET_DIR)         │
   └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -552,14 +551,14 @@ LIBBAZ_POST_INSTALL_STAGING_HOOKS += LIBBAZ_REMOVE_STATIC
       ▼
   meson-package macro
   ┌─────────────────────────────────────────────────────────────────┐
-  │  configure:  meson setup $(@D)/buildroot-build $(@D)           │
+  │  configure:  meson setup $(@D)/buildroot-build $(@D)            │
   │                    --cross-file <generated cross file>          │
   │                    --prefix=/usr                                │
-  │                    --libdir=lib                                  │
+  │                    --libdir=lib                                 │
   │                    $(LIBBAZ_CONF_OPTS)                          │
-  │  build:      ninja -C $(@D)/buildroot-build                    │
-  │  install:    DESTDIR=$(STAGING_DIR) ninja -C … install         │
-  │              DESTDIR=$(TARGET_DIR)  ninja -C … install         │
+  │  build:      ninja -C $(@D)/buildroot-build                     │
+  │  install:    DESTDIR=$(STAGING_DIR) ninja -C … install          │
+  │              DESTDIR=$(TARGET_DIR)  ninja -C … install          │
   └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1118,13 +1117,13 @@ int main(void)
 
 ```
 ┌─────────────────────┬──────────────────────────────┬────────────────────────────────────────┐
-│ Infrastructure      │ Key CONF_OPTS style           │ Mandatory overrides                    │
+│ Infrastructure      │ Key CONF_OPTS style          │ Mandatory overrides                    │
 ├─────────────────────┼──────────────────────────────┼────────────────────────────────────────┤
-│ autotools-package   │ --enable-foo / --with-bar     │ None (configure auto-detected)         │
-│ cmake-package       │ -DFOO=ON / -DBAR=value        │ None (CMakeLists.txt auto-detected)    │
-│ meson-package       │ -Dfoo=true / -Dbar=enabled    │ None (meson.build auto-detected)       │
-│ generic-package     │ N/A                           │ *_BUILD_CMDS + *_INSTALL_TARGET_CMDS   │
-│ cargo-package       │ --features / --no-default-…   │ None (Cargo.toml auto-detected)        │
+│ autotools-package   │ --enable-foo / --with-bar    │ None (configure auto-detected)         │
+│ cmake-package       │ -DFOO=ON / -DBAR=value       │ None (CMakeLists.txt auto-detected)    │
+│ meson-package       │ -Dfoo=true / -Dbar=enabled   │ None (meson.build auto-detected)       │
+│ generic-package     │ N/A                          │ *_BUILD_CMDS + *_INSTALL_TARGET_CMDS   │
+│ cargo-package       │ --features / --no-default-…  │ None (Cargo.toml auto-detected)        │
 └─────────────────────┴──────────────────────────────┴────────────────────────────────────────┘
 ```
 

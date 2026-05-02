@@ -1,4 +1,4 @@
-The document covers all major aspects of the topic across 11 sections:
+# 03. Toolchain Configuration & Management
 
 **Structure highlights:**
 
@@ -17,7 +17,6 @@ The document covers all major aspects of the topic across 11 sections:
 - **Section 10** — Shell commands to inspect and verify a toolchain after configuration
 - **Section 11** — Decision flowchart + summary table and the "golden rule" about ABI consistency
 
-# 03. Toolchain Configuration & Management
 
 > **Buildroot Series** | Topic 03 of N  
 > Covers: Internal vs. External Toolchains · crosstool-NG Integration · musl vs. glibc vs. uClibc-ng · ABI Selection · Floating-Point Options
@@ -84,12 +83,12 @@ A toolchain consists of:
 ║                  └── crosstool-NG generated (local path)             ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  ABI / Float Settings (apply to BOTH internal & external)           ║
+║  ABI / Float Settings (apply to BOTH internal & external)            ║
 ║                                                                      ║
-║   Architecture ──► ARM / MIPS / x86 / RISC-V / PowerPC / ...        ║
-║   ABI          ──► EABI / EABIHF / o32 / n32 / n64 / lp64 / ...     ║
+║   Architecture ──► ARM / MIPS / x86 / RISC-V / PowerPC / ...         ║
+║   ABI          ──► EABI / EABIHF / o32 / n32 / n64 / lp64 / ...      ║
 ║   Float        ──► soft / softfp / hard                              ║
-║   FPU          ──► vfpv3 / vfpv4 / neon / fpv5 / dp / ...           ║
+║   FPU          ──► vfpv3 / vfpv4 / neon / fpv5 / dp / ...            ║
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -368,7 +367,7 @@ ls ~/x-tools/arm-cortex_a8-linux-gnueabihf/bin/
 
 ```
   ┌──────────────┬──────────────┬─────────────────┬───────────────────┐
-  │  Property    │    glibc     │      musl        │    uClibc-ng      │
+  │  Property    │    glibc     │      musl       │    uClibc-ng      │
   ├──────────────┼──────────────┼─────────────────┼───────────────────┤
   │ Maturity     │ Very High    │ High            │ High              │
   │ Size (libc)  │ ~2.5 MB      │ ~500 KB         │ ~400 KB           │
@@ -542,14 +541,14 @@ Target options  --->
   │           │  GCC flag: -mfloat-abi=soft                          │
   ├───────────┼──────────────────────────────────────────────────────┤
   │  softfp   │  Hardware FPU executes float ops, but                │
-  │           │  function args passed via integer registers           │
+  │           │  function args passed via integer registers          │
   │           │  Bridges soft and hard code at ABI boundary.         │
-  │           │  GCC flag: -mfloat-abi=softfp -mfpu=...             │
+  │           │  GCC flag: -mfloat-abi=softfp -mfpu=...              │
   ├───────────┼──────────────────────────────────────────────────────┤
-  │  hard     │  Hardware FPU executes float ops AND                  │
+  │  hard     │  Hardware FPU executes float ops AND                 │
   │           │  function args passed via FPU registers              │
   │           │  Fastest. Incompatible with soft/softfp libs.        │
-  │           │  GCC flag: -mfloat-abi=hard -mfpu=...               │
+  │           │  GCC flag: -mfloat-abi=hard -mfpu=...                │
   └───────────┴──────────────────────────────────────────────────────┘
 ```
 
@@ -1064,7 +1063,7 @@ fn main() {
     println!("║  Architecture : {:20} ║", info.arch);
     println!("║  OS           : {:20} ║", info.os);
     println!("║  ABI env      : {:20} ║", TargetInfo::libc_env());
-    println!("║  Pointer bits : {:<20} ║", info.pointer_bits);
+    println!("║  Pointer bits : {:<20}║", info.pointer_bits);
     println!("║  Endianness   : {:20} ║", info.endian);
     println!("║  Float ABI    : {:20} ║", TargetInfo::float_abi());
     println!("╚═══════════════════════════════════════╝");
@@ -1232,14 +1231,14 @@ $ make sdk 2>&1 | grep -E 'gcc|binutils|glibc|musl|uclibc'
   │                   └─ Vendor SDK        (when vendor patches needed) │
   │                                                                     │
   │  C Library selection:                                               │
-  │      ├─ Full POSIX, NSS, Locale  → glibc                           │
-  │      ├─ Security, small footprint, static → musl                   │
-  │      └─ No-MMU, very small MCU   → uClibc-ng                       │
+  │      ├─ Full POSIX, NSS, Locale  → glibc                            │
+  │      ├─ Security, small footprint, static → musl                    │
+  │      └─ No-MMU, very small MCU   → uClibc-ng                        │
   │                                                                     │
   │  ABI/Float selection:                                               │
-  │      ├─ Has HW FPU (Cortex-A/R)  → hard-float EABIHF               │
-  │      ├─ Borderline FPU / compat  → softfp                          │
-  │      └─ No FPU (M0, M3, no-VFP) → soft-float EABI                 │
+  │      ├─ Has HW FPU (Cortex-A/R)  → hard-float EABIHF                │
+  │      ├─ Borderline FPU / compat  → softfp                           │
+  │      └─ No FPU (M0, M3, no-VFP) → soft-float EABI                   │
   └─────────────────────────────────────────────────────────────────────┘
 ```
 

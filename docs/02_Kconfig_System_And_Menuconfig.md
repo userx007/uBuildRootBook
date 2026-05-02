@@ -1,4 +1,4 @@
-Now let me create the comprehensive markdown document:The document covers the full Kconfig & menuconfig topic across 15 sections. Here's what's inside:
+# 02. Kconfig System & menuconfig
 
 **Architecture & Files**
 - Full data-flow ASCII diagram from `Config.in` → `.config` → Makefiles/headers
@@ -23,7 +23,6 @@ Now let me create the comprehensive markdown document:The document covers the fu
 **Advanced & Debugging**
 - `choice` blocks, versioned symbol selection, arch fragments, `allnoconfig`/`allyesconfig` for CI, `BR2_EXTERNAL` defconfig fragments, and a pitfall reference table
 
-# 02. Kconfig System & menuconfig
 
 > **Buildroot Series** | Topic 02 of N
 > A deep-dive into writing and extending `.config` and `Config.in` files, dependency
@@ -74,8 +73,8 @@ ASCII: Kconfig Data-Flow
 ═══════════════════════════════════════════════════════════════════════
   ┌─────────────────────────────────────────────────────────────────┐
   │                      Config.in files                            │
-  │   buildroot/Config.in ──► package/*/Config.in ──► toolchain/…  │
-  └─────────────────────────────┬───────────────────────────────────┘
+  │   buildroot/Config.in ──► package/*/Config.in ──► toolchain/…   │
+  └──────────────────────────────┬──────────────────────────────────┘
                                  │  parsed by
                                  ▼
                     ┌────────────────────────┐
@@ -270,7 +269,7 @@ endif  # BR2_PACKAGE_MYAPP
 
 | Type       | Kconfig keyword | `.config` form          | Make variable value |
 |------------|-----------------|-------------------------|---------------------|
-| Boolean    | `bool`          | `=y` or `# … not set`  | `y` or empty        |
+| Boolean    | `bool`          | `=y` or `# … not set`   | `y` or empty        |
 | Tristate   | `tristate`      | `=y`, `=m`, or not set  | `y`, `m`, or empty  |
 | String     | `string`        | `="some string"`        | `some string`       |
 | Integer    | `int`           | `=42`                   | `42`                |
@@ -409,8 +408,8 @@ make uboot-menuconfig    # U-Boot Config.in
 ║           Buildroot 2024.02 Configuration                                ║
 ╠══════════════════════════════════════════════════════════════════════════╣
 ║  Arrow keys navigate the menu.  <Enter> selects submenus --->            ║
-║  Highlighted letters are hotkeys.  Pressing <Y> includes, <N> excludes, ║
-║  <M> modularizes features.  Press <Esc><Esc> to exit, <?> for Help.     ║
+║  Highlighted letters are hotkeys.  Pressing <Y> includes, <N> excludes,  ║
+║  <M> modularizes features.  Press <Esc><Esc> to exit, <?> for Help.      ║
 ╠══════════════════════════════════════════════════════════════════════════╣
 ║                                                                          ║
 ║      Target options  --->                                                ║
@@ -657,7 +656,7 @@ through hand-written wrappers. The example below demonstrates:
 #include "features.h"
 
 /* ------------------------------------------------------------------ */
-/* Simple logging subsystem conditioned on Kconfig log level           */
+/* Simple logging subsystem conditioned on Kconfig log level          */
 /* ------------------------------------------------------------------ */
 
 #define LOG_ERROR   1
@@ -687,7 +686,7 @@ static const char *log_level_str(int level)
 }
 
 /* ------------------------------------------------------------------ */
-/* TLS availability gate                                               */
+/* TLS availability gate                                              */
 /* ------------------------------------------------------------------ */
 
 #ifdef MYAPP_WITH_TLS
@@ -707,7 +706,7 @@ static void tls_init(void)
 #endif /* MYAPP_WITH_TLS */
 
 /* ------------------------------------------------------------------ */
-/* Worker pool stub conditioned on MYAPP_WORKERS                       */
+/* Worker pool stub conditioned on MYAPP_WORKERS                      */
 /* ------------------------------------------------------------------ */
 
 typedef struct {
@@ -726,7 +725,7 @@ static void workers_init(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* Main                                                                */
+/* Main                                                               */
 /* ------------------------------------------------------------------ */
 
 int main(void)
@@ -1435,16 +1434,16 @@ ASCII: Kconfig System – Full Overview
 ═══════════════════════════════════════════════════════════════════════════════
                                                                                
    ┌─────────────────── Config.in tree ───────────────────────────────────┐   
-   │                                                                       │   
+   │                                                                      │   
    │  config BR2_PACKAGE_FOO     ← bool / string / int / hex              │   
-   │      bool "foo"             ← type + prompt                           │   
+   │      bool "foo"             ← type + prompt                          │   
    │      depends on A && !B     ← visibility / availability gate         │   
    │      select LIB_C           ← force-enables a dependency             │   
    │      imply LIB_D            ← soft suggestion                        │   
    │      default y if E         ← conditional default value              │   
    │      range 1 32             ← int/hex bounds                         │   
    │      help …                 ← shown in menuconfig '?' screen         │   
-   │                                                                       │   
+   │                                                                      │   
    │  menu / endmenu  ←─ visual grouping only (no symbol)                 │   
    │  if / endif      ←─ shared visibility condition                      │   
    │  choice          ←─ mutually exclusive radio group                   │   
@@ -1464,9 +1463,9 @@ ASCII: Kconfig System – Full Overview
        ┌──────────┴──────────┐                                                 
        ▼                     ▼                                                  
   ┌──────────┐       ┌─────────────────────────────────────────┐               
-  │ Makefile │       │   C/C++/Rust source                      │               
-  │ ifeq(…)  │       │   #ifdef / cfg!() / build.rs             │               
-  │ .mk deps │       │   ← compile-time feature gates           │               
+  │ Makefile │       │   C/C++/Rust source                     │               
+  │ ifeq(…)  │       │   #ifdef / cfg!() / build.rs            │               
+  │ .mk deps │       │   ← compile-time feature gates          │               
   └──────────┘       └─────────────────────────────────────────┘               
 ═══════════════════════════════════════════════════════════════════════════════
 ```

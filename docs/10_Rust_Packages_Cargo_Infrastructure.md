@@ -1,4 +1,4 @@
-Now let me create the comprehensive markdown document:The document covers the full topic across 12 sections with ASCII diagrams throughout:
+# 10. Rust Packages with `cargo-package` Infrastructure
 
 **Structure at a glance:**
 
@@ -15,7 +15,6 @@ Now let me create the comprehensive markdown document:The document covers the fu
 11. **Debugging** — common error messages with fixes, environment variable reference table
 12. **Summary** — large ASCII overview diagram + key takeaway bullets
 
-# 10. Rust Packages with `cargo-package` Infrastructure
 
 > **Buildroot Topic · Deep-Dive Reference**
 > Covers `cargo-package` (Buildroot ≥ 2023.02), `BR2_PACKAGE_RUST`, vendored dependencies,
@@ -55,18 +54,18 @@ Buildroot build system in a fully reproducible, offline, and cross-compilation-c
   │   menuconfig                                                    │
   │       │                                                         │
   │       ▼                                                         │
-  │   BR2_PACKAGE_RUST ──► host/bin/rustc   host/bin/cargo         │
+  │   BR2_PACKAGE_RUST ──► host/bin/rustc   host/bin/cargo          │
   │                              │                 │                │
   │                    ┌─────────┘                 │                │
   │                    │   Cross-toolchain         │                │
   │                    ▼                           ▼                │
-  │   CARGO_TARGET  ──► aarch64-unknown-linux-musl                 │
+  │   CARGO_TARGET  ──► aarch64-unknown-linux-musl                  │
   │   (triple)          thumbv7m-none-eabi                          │
   │                    x86_64-unknown-linux-gnu                     │
   │                              │                                  │
-  │   vendor/  ◄── cargo vendor  │  (offline, reproducible)        │
+  │   vendor/  ◄── cargo vendor  │  (offline, reproducible)         │
   │       │                      │                                  │
-  │       └──────────────────────┼──► cargo build --release        │
+  │       └──────────────────────┼──► cargo build --release         │
   │                              │         │                        │
   └──────────────────────────────┼─────────┼────────────────────────┘
                                  │         │
@@ -424,9 +423,9 @@ directory = "vendor"
  ├──────────────────────────────┼───────────────────────────────────┤
  │  aarch64-unknown-linux-gnu   │  RPi 4/5, NVIDIA Jetson, etc.     │
  │  aarch64-unknown-linux-musl  │  Static musl binaries (portable)  │
- │  armv7-unknown-linux-gnueabihf│ RPi 2/3, i.MX6, AM335x          │
- │  x86_64-unknown-linux-musl   │  Static x86 (containers)         │
- │  riscv64gc-unknown-linux-gnu │  SiFive HiFive, StarFive VisionFive│
+ │ armv7-unknown-linux-gnueabihf│  RPi 2/3, i.MX6, AM335x           │
+ │  x86_64-unknown-linux-musl   │  Static x86 (containers)          │
+ │  riscv64gc-unknown-linux-gnu │  SiFive HiFive StarFive VisionFive│
  └──────────────────────────────┴───────────────────────────────────┘
 ```
 
@@ -975,10 +974,10 @@ $(eval $(cargo-package))
       │       │                                         │
       │       ├─► build.rs (runs on HOST)               │
       │       │       │                                 │
-      │       │       ├─► pkg-config libpcre2            │
+      │       │       ├─► pkg-config libpcre2           │
       │       │       │       │                         │
       │       │       │       └─► STAGING_DIR/usr/lib/  │
-      │       │       │               libpcre2-8.a ──── ┤
+      │       │       │               libpcre2-8.a ─────┤
       │       │       │                                 │
       │       │       └─► emit: cargo:rustc-link-lib=pcre2-8
       │       │                 cargo:rustc-link-search=...

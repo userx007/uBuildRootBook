@@ -1,4 +1,4 @@
-Now I'll create the detailed markdown document:The document covers all aspects of the topic across 12 sections:
+# 07. Package Dependencies, Ordering & Virtual Packages
 
 **Structure highlights:**
 
@@ -11,7 +11,6 @@ Now I'll create the detailed markdown document:The document covers all aspects o
 - **Three ASCII diagrams** — dependency resolution Make chain, virtual package swap topology, and the host/target/staging sysroot layout
 - **Summary table** — quick-reference mapping of every concept to its variable and purpose
 
-# 07. Package Dependencies, Ordering & Virtual Packages
 
 > **Buildroot Series — Topic 07**
 > Covering `*_DEPENDENCIES`, `*_PROVIDES`, `*_CONFLICTS`, host/target split propagation,
@@ -582,7 +581,7 @@ $(eval $(cargo-package))
   ┌─────────────────────────────────────────────────────────────────┐
   │  [*] libcurl                                                    │
   │  [*]   openssl  (virtual)                                       │
-  │          ├── (●) libopenssl   ← user selects this              │
+  │          ├── (●) libopenssl   ← user selects this               │
   │          └── ( ) libressl                                       │
   └─────────────────────────────────────────────────────────────────┘
                          │
@@ -596,7 +595,7 @@ $(eval $(cargo-package))
   │       └────────┬────────┘                    │                │
   │                │                             │                │
   │                ▼                             ▼                │
-  │         libcurl-configure  ◄──────────────────               │
+  │         libcurl-configure  ◄──────────────────                │
   │                │                                              │
   │                ▼                                              │
   │         libcurl-build                                         │
@@ -626,7 +625,7 @@ $(eval $(cargo-package))
   ╚══════════════════════════════════════════════════════════════╝
              ▲                            ▲
              │  PROVIDES = openssl        │  PROVIDES = openssl
-  ┌──────────┴──────────┐      ┌──────────┴──────────┐
+  ┌──────────┴───────────┐      ┌─────────┴────────────┐
   │     libopenssl       │      │      libressl        │
   │  (OpenSSL 3.x)       │      │  (OpenBSD fork)      │
   │                      │      │                      │
@@ -665,25 +664,25 @@ $(eval $(cargo-package))
   │                                                                  │
   │  $(HOST_DIR)/                                                    │
   │  ├── bin/                                                        │
-  │  │   ├── arm-linux-gnueabihf-gcc   ← cross compiler             │
-  │  │   ├── cmake                     ← host-cmake                 │
-  │  │   ├── pkg-config                ← host-pkgconf               │
-  │  │   └── openssl   (host tool)     ← host-libopenssl            │
+  │  │   ├── arm-linux-gnueabihf-gcc   ← cross compiler              │
+  │  │   ├── cmake                     ← host-cmake                  │
+  │  │   ├── pkg-config                ← host-pkgconf                │
+  │  │   └── openssl   (host tool)     ← host-libopenssl             │
   │  ├── lib/                                                        │
-  │  │   └── libssl.so   (for host tools only)                      │
-  │  └── arm-linux-gnueabihf/sysroot/                               │
-  │      └── (= STAGING_DIR, see below)                             │
+  │  │   └── libssl.so   (for host tools only)                       │
+  │  └── arm-linux-gnueabihf/sysroot/                                │
+  │      └── (= STAGING_DIR, see below)                              │
   │                                                                  │
-  │  $(STAGING_DIR)/   ← cross-compiled, target ABI                 │
-  │  ├── usr/include/openssl/          ← headers for cross-build    │
+  │  $(STAGING_DIR)/   ← cross-compiled, target ABI                  │
+  │  ├── usr/include/openssl/          ← headers for cross-build     │
   │  └── usr/lib/                                                    │
-  │      ├── libssl.so                 ← target library             │
-  │      └── libcrypto.so                                           │
+  │      ├── libssl.so                 ← target library              │
+  │      └── libcrypto.so                                            │
   │                                                                  │
-  │  $(TARGET_DIR)/    ← final rootfs (no headers, no .a files)     │
+  │  $(TARGET_DIR)/    ← final rootfs (no headers, no .a files)      │
   │  └── usr/lib/                                                    │
-  │      ├── libssl.so.3                                            │
-  │      └── libcrypto.so.3                                         │
+  │      ├── libssl.so.3                                             │
+  │      └── libcrypto.so.3                                          │
   │                                                                  │
   └──────────────────────────────────────────────────────────────────┘
               │                              │

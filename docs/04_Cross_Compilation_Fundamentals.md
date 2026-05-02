@@ -1,4 +1,4 @@
-Now I have the skill info. Let me create the comprehensive markdown document.The document covers the full topic across **10 sections** with ASCII diagrams throughout:
+# 04. Cross-Compilation Fundamentals in Buildroot
 
 **Structure at a glance:**
 
@@ -13,7 +13,6 @@ Now I have the skill info. Let me create the comprehensive markdown document.The
 9. **Common Pitfalls** — 7 pitfalls with fixes: host contamination, float ABI mismatch, C++ runtime, Rust link errors, autoconf cache poisoning, endianness, PATH ordering
 10. **Summary** — big-picture ASCII diagram, key concepts table, cross-compilation checklist, quick-reference env vars
 
-# 04. Cross-Compilation Fundamentals in Buildroot
 
 > **Topic:** `CROSS_COMPILE`, sysroot, `pkg-config` wrappers, `HOST_` vs `TARGET_` make variables,
 > and common pitfalls when porting C++/Rust code.
@@ -236,14 +235,14 @@ arm-buildroot-linux-gnueabihf-gcc -v 2>&1 | grep -E "SYSROOT|--with-sysroot"
   │  pkg-config --cflags libssl         (system pkg-config) │
   │                                                         │
   │  Returns: -I/usr/include/openssl    ← HOST path! WRONG  │
-  │           -L/usr/lib/x86_64-...    ← HOST arch! WRONG  │
+  │           -L/usr/lib/x86_64-...    ← HOST arch! WRONG   │
   └─────────────────────────────────────────────────────────┘
 
   ┌─────────────────────────────────────────────────────────┐
   │  pkg-config --cflags libssl         (Buildroot wrapper) │
   │                                                         │
-  │  Returns: -I/sysroot/usr/include    ← TARGET path! OK  │
-  │           -L/sysroot/usr/lib        ← TARGET arch! OK  │
+  │  Returns: -I/sysroot/usr/include    ← TARGET path! OK   │
+  │           -L/sysroot/usr/lib        ← TARGET arch! OK   │
   └─────────────────────────────────────────────────────────┘
 ```
 
@@ -690,15 +689,15 @@ set(ENV{PKG_CONFIG_LIBDIR}
   Rust target triple:          armv7-unknown-linux-gnueabihf
 
   Mapping:
-  ┌────────────────────────────────────────────────────────────┐
-  │  Architecture   OS      ABI/Vendor      Rust Triple        │
-  │  ───────────    ──      ──────────      ────────────────   │
-  │  armv7          linux   gnueabihf  →  armv7-unknown-linux-gnueabihf
-  │  aarch64        linux   gnu        →  aarch64-unknown-linux-gnu
-  │  riscv64gc      linux   gnu        →  riscv64gc-unknown-linux-gnu
-  │  mipsel         linux   gnu        →  mipsel-unknown-linux-gnu
-  │  x86_64         linux   gnu        →  x86_64-unknown-linux-gnu (host)
-  └────────────────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Architecture   OS      ABI/Vendor      Rust Triple                  │
+  │  ───────────    ──      ──────────      ──────────────────────────   │
+  │  armv7          linux   gnueabihf  →  armv7-unknown-linux-gnueabihf  │
+  │  aarch64        linux   gnu        →  aarch64-unknown-linux-gnu      │
+  │  riscv64gc      linux   gnu        →  riscv64gc-unknown-linux-gnu    │
+  │  mipsel         linux   gnu        →  mipsel-unknown-linux-gnu       │
+  │  x86_64         linux   gnu        →  x86_64-unknown-linux-gnu (host)│
+  └──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 8.2 Configuring Cargo for Cross-Compilation
@@ -851,15 +850,15 @@ $(eval $(cargo-package))
 
   ┌─────────────────────┐  ┌──────────────────────┐  ┌─────────────────────┐
   │  HOST contamination │  │  ABI mismatch        │  │  Hard-coded paths   │
-  │  ─────────────────  │  │  ──────────────────  │  │  ───────────────── │
-  │  Wrong pkg-config   │  │  float-abi mismatch  │  │  /usr/lib in .pc   │
-  │  Host headers used  │  │  soft vs hard FP     │  │  Absolute sysroot  │
-  │  Host libs linked   │  │  endianness error    │  │  paths in Makefile │
+  │  ─────────────────  │  │  ──────────────────  │  │  ─────────────────  │
+  │  Wrong pkg-config   │  │  float-abi mismatch  │  │  /usr/lib in .pc    │
+  │  Host headers used  │  │  soft vs hard FP     │  │  Absolute sysroot   │
+  │  Host libs linked   │  │  endianness error    │  │  paths in Makefile  │
   └─────────────────────┘  └──────────────────────┘  └─────────────────────┘
          │                          │                          │
          └──────────────────────────┼──────────────────────────┘
                                     │
-                     ┌──────────────▼──────────────┐
+                     ┌──────────────▼───────────────┐
                      │  Symptoms / Errors           │
                      │  ─────────────────────────   │
                      │  "cannot execute binary"     │
@@ -867,7 +866,7 @@ $(eval $(cargo-package))
                      │  Segfaults at runtime        │
                      │  Linker: wrong architecture  │
                      │  "undefined reference"       │
-                     └─────────────────────────────┘
+                     └──────────────────────────────┘
 ```
 
 ### 9.2 Pitfall 1 — Host Library Contamination
@@ -929,8 +928,8 @@ CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard"
   ┌───────────────────────────────────────────────────────────────┐
   │ Common error: undefined reference to `std::__throw_bad_alloc' │
   │ Cause: linking against wrong or missing libstdc++             │
-  │ Fix: ensure $(STAGING_DIR)/usr/lib/libstdc++.so.* exists     │
-  │      and LDFLAGS includes the sysroot                        │
+  │ Fix: ensure $(STAGING_DIR)/usr/lib/libstdc++.so.* exists      │
+  │      and LDFLAGS includes the sysroot                         │
   └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -1040,13 +1039,13 @@ which gcc
   ┌──────────────────────────────────────────────────────────────────────┐
   │               Buildroot Cross-Compilation Architecture               │
   │                                                                      │
-  │   CROSS_COMPILE prefix              Sysroot                         │
+  │   CROSS_COMPILE prefix              Sysroot                          │
   │   ════════════════════              ═══════                          │
-  │   "arm-linux-gnueabihf-"           output/staging/                  │
+  │   "arm-linux-gnueabihf-"           output/staging/                   │
   │    │                                │                                │
-  │    ├─ gcc    → compile .c           ├─ usr/include/  (target hdrs)  │
-  │    ├─ g++    → compile .cpp         ├─ usr/lib/      (target libs)  │
-  │    ├─ ld     → link                 └─ lib/          (ld, libc)     │
+  │    ├─ gcc    → compile .c           ├─ usr/include/  (target hdrs)   │
+  │    ├─ g++    → compile .cpp         ├─ usr/lib/      (target libs)   │
+  │    ├─ ld     → link                 └─ lib/          (ld, libc)      │
   │    ├─ ar     → archive                                               │
   │    └─ strip  → remove debug                                          │
   │                                                                      │
@@ -1061,7 +1060,7 @@ which gcc
   │   Rust additions                                                     │
   │   ═════════════                                                      │
   │   rustup target add <triple>                                         │
-  │   .cargo/config.toml linker = "arm-linux-gnueabihf-gcc"             │
+  │   .cargo/config.toml linker = "arm-linux-gnueabihf-gcc"              │
   │   PKG_CONFIG_ALLOW_CROSS=1                                           │
   │   OPENSSL_DIR=$(STAGING_DIR)/usr                                     │
   └──────────────────────────────────────────────────────────────────────┘

@@ -1,4 +1,4 @@
-Now I'll create the detailed markdown document:The document covers the full topic with these sections:
+# 09. C++ Packages — Cross-Compiled Libraries & Applications
 
 **Structure overview:**
 - **Cross-compilation pipeline** — ASCII diagram showing host→target flow with sysroot layout
@@ -13,7 +13,6 @@ Now I'll create the detailed markdown document:The document covers the full topi
 - **Troubleshooting** — common ABI/linking errors with causes and fixes
 - **Summary checklist** — ASCII box with full build checklist and key `make` commands
 
-# 09. C++ Packages — Cross-Compiled Libraries & Applications
 ## Buildroot: Packaging, CMake Integration, and Cross-Compilation
 
 ---
@@ -403,11 +402,11 @@ Debug symbols can increase binary size by 10–50×. On embedded targets with li
 
 ```
   Binary size (example mycppapp):
-  ┌─────────────────────────────────────────────────────┐
+  ┌──────────────────────────────────────────────────────┐
   │  With debug symbols:  2,847 KB  ████████████████████ │
   │  After strip:           184 KB  █▌                   │
   │  After strip + UPX:      98 KB  ▊                    │
-  └─────────────────────────────────────────────────────┘
+  └──────────────────────────────────────────────────────┘
   Reduction: ~93% with strip alone
 ```
 
@@ -989,34 +988,34 @@ arm-linux-gnueabihf-strings output/target/usr/bin/mycppapp | grep GLIBCXX
   ├─────────────────────────────────────────────────────────────┤
   │                                                             │
   │  Config.in                                                  │
-  │  ├─ [✓] depends on BR2_INSTALL_LIBSTDCPP                   │
-  │  ├─ [✓] depends on BR2_TOOLCHAIN_GCC_AT_LEAST_7 (C++17)   │
-  │  └─ [✓] select dependencies (libfoo, zlib, ...)            │
+  │  ├─ [✓] depends on BR2_INSTALL_LIBSTDCPP                    │
+  │  ├─ [✓] depends on BR2_TOOLCHAIN_GCC_AT_LEAST_7 (C++17)     │
+  │  └─ [✓] select dependencies (libfoo, zlib, ...)             │
   │                                                             │
   │  .mk file                                                   │
-  │  ├─ [✓] $(eval $(cmake-package))                           │
-  │  ├─ [✓] CMAKE_CXX_STANDARD=17                              │
-  │  ├─ [✓] CMAKE_CXX_EXTENSIONS=OFF                           │
-  │  ├─ [✓] CMAKE_BUILD_TYPE=Release                           │
-  │  ├─ [✓] MYCPPAPP_DEPENDENCIES = zlib libfoo                │
-  │  └─ [✓] POST_INSTALL strip hook                            │
+  │  ├─ [✓] $(eval $(cmake-package))                            │
+  │  ├─ [✓] CMAKE_CXX_STANDARD=17                               │
+  │  ├─ [✓] CMAKE_CXX_EXTENSIONS=OFF                            │
+  │  ├─ [✓] CMAKE_BUILD_TYPE=Release                            │
+  │  ├─ [✓] MYCPPAPP_DEPENDENCIES = zlib libfoo                 │
+  │  └─ [✓] POST_INSTALL strip hook                             │
   │                                                             │
   │  CMakeLists.txt                                             │
-  │  ├─ [✓] find_package(ZLIB REQUIRED)                        │
-  │  ├─ [✓] CMAKE_FIND_ROOT_PATH_MODE = ONLY                   │
+  │  ├─ [✓] find_package(ZLIB REQUIRED)                         │
+  │  ├─ [✓] CMAKE_FIND_ROOT_PATH_MODE = ONLY                    │
   │  │       (auto-set by Buildroot toolchain file)             │
-  │  └─ [✓] install(TARGETS ...)                               │
+  │  └─ [✓] install(TARGETS ...)                                │
   │                                                             │
   │  Stripping pipeline                                         │
-  │  ├─ CMake Release build     → removes -g debug info        │
+  │  ├─ CMake Release build     → removes -g debug info         │
   │  ├─ Buildroot auto-strip    → runs TARGET_STRIP             │
-  │  └─ --strip-unneeded        → removes .symtab, .debug_*    │
+  │  └─ --strip-unneeded        → removes .symtab, .debug_*     │
   │                                                             │
   │  Key commands                                               │
-  │  ├─ make mycppapp           → build only this package      │
-  │  ├─ make mycppapp-rebuild   → force full rebuild           │
-  │  ├─ make mycppapp-dirclean  → delete build dir             │
-  │  └─ BR2_JLEVEL=4 make      → parallel build (4 jobs)      │
+  │  ├─ make mycppapp           → build only this package       │
+  │  ├─ make mycppapp-rebuild   → force full rebuild            │
+  │  ├─ make mycppapp-dirclean  → delete build dir              │
+  │  └─ BR2_JLEVEL=4 make      → parallel build (4 jobs)        │
   │                                                             │
   └─────────────────────────────────────────────────────────────┘
 ```

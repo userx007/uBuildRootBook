@@ -1,4 +1,4 @@
-Now I have what I need. Let me create the comprehensive markdown document.Here's a breakdown of what the document covers across its 12 sections:
+# 11. Linux Kernel Configuration & Custom defconfig
 
 **Architecture & Flow** — ASCII diagrams showing the full layered pipeline from upstream defconfig through fragments to the final `.config` and build output.
 
@@ -17,7 +17,6 @@ Now I have what I need. Let me create the comprehensive markdown document.Here's
 - **C++** — a kernel `.config` parser and rule-checker for CI pipelines, plus a `KernelModule` class for sysfs interaction
 - **Rust** — a Rust kernel module skeleton using the official kernel Rust bindings, a host tool generating fragments from TOML specs, and a Buildroot build script
 
-# 11. Linux Kernel Configuration & Custom defconfig
 
 > **Buildroot Series — Chapter 11**
 > Topics: `BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE`, kernel fragments (`kernel_config_frag`),
@@ -50,32 +49,32 @@ Buildroot provides a well-structured workflow for managing the kernel `.config`:
 
 ```
   ┌────────────────────────────────────────────────────────────────┐
-  │                   Buildroot Kernel Config Flow                  │
-  │                                                                  │
-  │  Board defconfig       Kernel defconfig      Kernel fragments    │
-  │  (configs/myboard_    (board/myboard/        (board/myboard/    │
-  │   defconfig)           linux.config)          linux.frag)       │
-  │        │                    │                      │            │
-  │        ▼                    ▼                      ▼            │
+  │                   Buildroot Kernel Config Flow                 │
+  │                                                                │
+  │  Board defconfig       Kernel defconfig      Kernel fragments  │
+  │  (configs/myboard_    (board/myboard/        (board/myboard/   │
+  │   defconfig)           linux.config)          linux.frag)      │
+  │        │                    │                      │           │
+  │        ▼                    ▼                      ▼           │
   │  ┌──────────────────────────────────────────────────────────┐  │
   │  │               BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE        │  │
   │  │               BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES     │  │
   │  └─────────────────────────────┬────────────────────────────┘  │
-  │                                │                                │
-  │                                ▼                                │
+  │                                │                               │
+  │                                ▼                               │
   │                   ┌────────────────────────┐                   │
-  │                   │  merge_config.sh +      │                   │
-  │                   │  scripts/kconfig/       │                   │
+  │                   │  merge_config.sh +     │                   │
+  │                   │  scripts/kconfig/      │                   │
   │                   └───────────┬────────────┘                   │
-  │                               │                                 │
-  │                               ▼                                 │
+  │                               │                                │
+  │                               ▼                                │
   │                   ┌────────────────────────┐                   │
   │                   │   output/build/        │                   │
   │                   │   linux-x.y.z/.config  │                   │
   │                   └───────────┬────────────┘                   │
-  │                               │                                 │
-  │                               ▼                                 │
-  │                       make linux-image                          │
+  │                               │                                │
+  │                               ▼                                │
+  │                       make linux-image                         │
   └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -298,10 +297,10 @@ Internally Buildroot calls the kernel's own `scripts/kconfig/merge_config.sh`:
 
 ```
   base defconfig            fragment 1              fragment 2
-  ┌──────────────┐       ┌──────────────┐       ┌──────────────┐
-  │CONFIG_NET=y  │  +    │CONFIG_USB=y  │  +    │CONFIG_KGDB=y │
+  ┌──────────────┐       ┌──────────────┐       ┌───────────────┐
+  │CONFIG_NET=y  │  +    │CONFIG_USB=y  │  +    │CONFIG_KGDB=y  │
   │CONFIG_MMC=y  │       │CONFIG_XHCI=y │       │CONFIG_FTRACE=y│
-  └──────────────┘       └──────────────┘       └──────────────┘
+  └──────────────┘       └──────────────┘       └───────────────┘
            │                     │                     │
            └─────────────────────┴─────────────────────┘
                                  │
@@ -365,7 +364,7 @@ Buildroot ensures the correct cross-compiler, architecture (`ARCH`), and cross-c
 
 ```
   ┌────────────────────── Linux Kernel Configuration ──────────────────────────┐
-  │  Arrow keys navigate. <Enter> selects. <?> for help. <Esc><Esc> to exit.  │
+  │  Arrow keys navigate. <Enter> selects. <?> for help. <Esc><Esc> to exit.   │
   ├────────────────────────────────────────────────────────────────────────────┤
   │                                                                            │
   │    General setup  --->                                                     │
@@ -378,7 +377,7 @@ Buildroot ensures the correct cross-compiler, architecture (`ARCH`), and cross-c
   │        Kernel hacking  --->                                                │
   │        Security options  --->                                              │
   │                                                                            │
-  │  Legend:  [*] built-in   [ ] excluded   <M> module   < > module capable   │
+  │  Legend:  [*] built-in   [ ] excluded   <M> module   < > module capable    │
   ├────────────────────────────────────────────────────────────────────────────┤
   │         <Select>    < Exit >    < Help >    < Save >    < Load >           │
   └────────────────────────────────────────────────────────────────────────────┘
@@ -1563,7 +1562,7 @@ fn main() {
 Linux kernel configuration in Buildroot is a multi-layered, well-tooled process. The diagram below captures the full workflow end-to-end:
 
 ```
-  ┌─────────────────────────────────────────────────────────────────────────┐
+  ┌──────────────────────────────────────────────────────────────────────────┐
   │                 Complete Kernel Config Workflow Summary                  │
   │                                                                          │
   │  STEP 1: Choose a starting point                                         │
@@ -1574,50 +1573,50 @@ Linux kernel configuration in Buildroot is a multi-layered, well-tooled process.
   │  $ cp defconfig ../../../board/myboard/linux.config                      │
   │                                                                          │
   │  STEP 2: Set BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE                         │
-  │  ────────────────────────────────────────────────                         │
+  │  ────────────────────────────────────────────────                        │
   │  In configs/myboard_defconfig:                                           │
   │  BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="board/myboard/linux.config"        │
   │                                                                          │
-  │  STEP 3: Add fragments for variants/features                              │
-  │  ────────────────────────────────────────────                             │
+  │  STEP 3: Add fragments for variants/features                             │
+  │  ────────────────────────────────────────────                            │
   │  BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES=                                 │
   │      "board/myboard/linux-usb.frag board/myboard/linux-debug.frag"       │
   │                                                                          │
-  │  STEP 4: Interactively tune                                               │
-  │  ──────────────────────────                                               │
+  │  STEP 4: Interactively tune                                              │
+  │  ──────────────────────────                                              │
   │  $ make linux-menuconfig                                                 │
   │    (navigate, search with /, toggle with Y/N/M)                          │
   │                                                                          │
-  │  STEP 5: Save your changes back                                           │
-  │  ────────────────────────────                                             │
+  │  STEP 5: Save your changes back                                          │
+  │  ────────────────────────────                                            │
   │  $ make linux-update-defconfig                                           │
   │    (or: make linux-savedefconfig && cp …/defconfig board/myboard/        │
   │         linux.config)                                                    │
   │                                                                          │
-  │  STEP 6: Build                                                            │
-  │  ─────────                                                                │
+  │  STEP 6: Build                                                           │
+  │  ─────────                                                               │
   │  $ make                                                                  │
   │                                                                          │
-  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐                │
-  │  │  linux.config│   │  *.frag      │   │ Out-of-tree  │                │
-  │  │  (base)      │ + │  (overlays)  │ + │ modules (=m) │                │
-  │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘                │
-  │         └──────────────────┴──────────────────┘                        │
+  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐                  │
+  │  │  linux.config│   │  *.frag      │   │ Out-of-tree  │                  │
+  │  │  (base)      │ + │  (overlays)  │ + │ modules (=m) │                  │
+  │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘                  │
+  │         └──────────────────┴──────────────────┘                          │
   │                             │                                            │
   │                             ▼                                            │
   │                  merge_config.sh (kernel)                                │
   │                             │                                            │
   │                             ▼                                            │
-  │              output/build/linux-x.y.z/.config                           │
+  │              output/build/linux-x.y.z/.config                            │
   │                             │                                            │
-  │                    ┌────────┴────────┐                                  │
+  │                    ┌────────┴────────┐                                   │
   │                    ▼                 ▼                                   │
-  │              vmlinuz / zImage    *.ko modules                           │
+  │              vmlinuz / zImage    *.ko modules                            │
   │                    │                 │                                   │
-  │                    └────────┬────────┘                                  │
+  │                    └────────┬────────┘                                   │
   │                             ▼                                            │
   │                    target rootfs image                                   │
-  └─────────────────────────────────────────────────────────────────────────┘
+  └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Concepts — Quick Reference

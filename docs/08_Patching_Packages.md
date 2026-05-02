@@ -1,4 +1,4 @@
-Now let me create the comprehensive markdown document:Here's your complete document — **08_Patching_Packages.md** — covering all the requested aspects:
+# 08. Patching Packages in Buildroot
 
 **Structure at a glance:**
 
@@ -14,7 +14,6 @@ Now let me create the comprehensive markdown document:Here's your complete docum
 - **Upstream submission workflow** — full ASCII decision tree, annotated `series` tracking comments, and the correct patch header format
 - **Pitfalls & summary** — rule table, decision trees, and version-bump guidance
 
-# 08. Patching Packages in Buildroot
 
 > **Topic:** `series` files, `quilt`, naming conventions (`0001-*.patch`),
 > upstream submission workflow, and applying patches conditionally per architecture.
@@ -932,7 +931,7 @@ make libfoo V=1 2>&1 | tee /tmp/build.log
   | 0001-fix.patch      |          | 0001-fix.patch      |
   | applies cleanly     |          | FAILS: context      |
   | on 1.2.3            |   bump   | lines no longer     |
-  |                     |  -----> | match 1.3.0 source  |
+  |                     |  ----->  | match 1.3.0 source  |
   +---------------------+          +---------------------+
                                            |
                                            v
