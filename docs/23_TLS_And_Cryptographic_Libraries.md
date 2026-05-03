@@ -1,1260 +1,1578 @@
-# 22. Security Hardening in Buildroot
+# 23. TLS & Cryptographic Libraries in Buildroot
 
-**Structure:**
-- **Introduction & threat model** — why hardening matters on embedded targets, with an ASCII pipeline diagram
-- **Compiler flags** deep-dives — stack canary layout, ASLR address-space diagrams, GOT/PLT before-and-after RELRO
-- **Buildroot Kconfig** — full table of `BR2_SSP_*` and `BR2_RELRO_*` options with their injected flags and a ready-to-use defconfig fragment
+**Structure & Content:**
 
-**Code examples:**
-- **C (3 examples):** stack canary demo, safe string handling with `snprintf`/`strnlen`, and a self-checking binary that probes for SSP/FORTIFY/PIE at runtime
-- **C++ (2 examples):** a PIE-hardened socket service and an ELF security property checker that produces ASCII audit reports
-- **Rust (3 examples):** a safe config file parser with explicit error types and length enforcement, the Buildroot `.mk` package file for Cargo, and a Unix-socket IPC server demonstrating Rust's ownership-based memory safety
+- **Library comparison matrix** — OpenSSL vs. mbedTLS vs. WolfSSL across footprint, FIPS support, hardware engine API, Rust bindings, and license, plus an ASCII decision tree for choosing between them
+- **Buildroot configuration** — `menuconfig` ASCII layout, config fragment snippets, and a minimal `openssl.cnf` for embedded targets
+- **Certificate deployment** — filesystem layout diagram, factory provisioning shell script using `openssl ecparam` + `x509`
+- **C code examples** — full TLS 1.3 client in OpenSSL, full TLS 1.3 client in mbedTLS (both with graceful error handling)
+- **C++ RAII wrappers** — `tls::Session` and `tls::SslCtxPtr` with `unique_ptr` deleters, a `Config` struct, and a working demo
+- **Hardware crypto engine** — ASCII stack diagram showing the software/kernel/hardware layers, OpenSSL cryptodev engine demo with graceful software fallback, mbedTLS ALT hook implementation for SoC AES accelerators
+- **PKCS#11 in C++** — full RAII session class with EC key pair generation and ECDSA signing via `dlopen`/`CK_FUNCTION_LIST`
+- **PKCS#11 in Rust** — `cryptoki` crate usage with RSA-2048 keygen and signing
+- **mTLS** — sequence diagram (ASCII) of the full handshake, plus a complete OpenSSL mTLS echo server in C++ with CN extraction
+- **Performance benchmark table** — AES and RSA numbers for common Cortex-A cores, SW vs. HW
+- **Security hardening checklist** — structured ASCII checklist covering certs, TLS config, Buildroot packaging, and key storage
+- **Summary** — narrative overview tying all sections together
 
-**All graphics are ASCII art** — stack frame diagrams, virtual memory layouts, GOT overwrite models, FORTIFY_SOURCE internals, and audit report tables.
 
+> **Buildroot Embedded Systems Series — Chapter 23**
+> OpenSSL vs. mbedTLS vs. WolfSSL selection, certificate deployment, hardware crypto engine integration, and PKCS#11 in C++/Rust.
+
+---
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [Why Security Hardening Matters in Embedded Systems](#why-security-hardening-matters)
-3. [Compiler Hardening Flags](#compiler-hardening-flags)
-4. [Buildroot Security Configuration Options](#buildroot-security-configuration-options)
-5. [Stripping SUID Binaries](#stripping-suid-binaries)
-6. [Removing Development Tools](#removing-development-tools)
-7. [Stack Protection in Practice — C Examples](#stack-protection-in-practice--c-examples)
-8. [Position-Independent Executables — C++ Examples](#position-independent-executables--c-examples)
-9. [Memory Safety with Rust](#memory-safety-with-rust)
-10. [Fortify Source Deep Dive](#fortify-source-deep-dive)
-11. [RELRO and Full Hardening Pipeline](#relro-and-full-hardening-pipeline)
-12. [Verification and Audit Tools](#verification-and-audit-tools)
+2. [Library Comparison: OpenSSL vs. mbedTLS vs. WolfSSL](#library-comparison)
+3. [Buildroot Configuration](#buildroot-configuration)
+4. [Certificate Deployment](#certificate-deployment)
+5. [TLS Client & Server in C](#tls-client--server-in-c)
+6. [TLS in C++ — RAII Wrappers](#tls-in-c--raii-wrappers)
+7. [Hardware Crypto Engine Integration](#hardware-crypto-engine-integration)
+8. [PKCS#11 — C++ and Rust](#pkcs11--c-and-rust)
+9. [Rust TLS with rustls and tokio-rustls](#rust-tls-with-rustls-and-tokio-rustls)
+10. [Mutual TLS (mTLS)](#mutual-tls-mtls)
+11. [Performance Benchmarking](#performance-benchmarking)
+12. [Security Hardening Checklist](#security-hardening-checklist)
 13. [Summary](#summary)
 
 ---
 
 ## Introduction
 
-Security hardening in Buildroot refers to the systematic process of reducing the attack surface of an embedded Linux system by applying compiler-level protections, removing unnecessary privileges, stripping development artifacts, and configuring the build system to enforce hardened defaults across every package.
+Embedded Linux systems built with Buildroot increasingly require secure communication channels. Whether you are sending sensor data to a cloud backend, downloading OTA firmware updates, or authenticating an industrial device to a server, TLS (Transport Layer Security) and strong cryptography are non-negotiable.
 
-Buildroot provides a curated set of `BR2_SSP_*` and `BR2_RELRO_*` Kconfig options that inject hardening flags globally into every package's build process, so developers do not need to patch individual Makefiles. This chapter covers the full hardening pipeline from the compiler command line all the way to final image verification.
+Buildroot provides three primary TLS/crypto library choices:
 
 ```
-  ┌─────────────────────────────────────────────────────────┐
-  │              BUILDROOT SECURITY HARDENING               │
-  │                                                         │
-  │  Source Code                                            │
-  │      │                                                  │
-  │      ▼                                                  │
-  │  ┌──────────────────────────────────┐                   │
-  │  │  Compiler (GCC / Clang)          │                   │
-  │  │  -fstack-protector-strong        │                   │
-  │  │  -D_FORTIFY_SOURCE=2             │                   │
-  │  │  -fPIE / -pie                    │                   │
-  │  │  -Wl,-z,relro,-z,now             │                   │
-  │  └──────────────────────────────────┘                   │
-  │      │                                                  │
-  │      ▼                                                  │
-  │  ┌──────────────────────────────────┐                   │
-  │  │  Linker / strip pass             │                   │
-  │  │  Strip SUID bits                 │                   │
-  │  │  Remove dev tools                │                   │
-  │  └──────────────────────────────────┘                   │
-  │      │                                                  │
-  │      ▼                                                  │
-  │  ┌──────────────────────────────────┐                   │
-  │  │  Root Filesystem Image           │                   │
-  │  │  Hardened, minimal, production   │                   │
-  │  └──────────────────────────────────┘                   │
-  └─────────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────┐
+  │              TLS/Crypto Library Ecosystem in Buildroot          │
+  │                                                                 │
+  │   ┌───────────┐     ┌───────────┐     ┌───────────────────┐     │
+  │   │  OpenSSL  │     │  mbedTLS  │     │     WolfSSL       │     │
+  │   │  3.x/1.1  │     │  (Arm)    │     │  (wolfCrypt)      │     │
+  │   └─────┬─────┘     └─────┬─────┘     └─────────┬─────────┘     │
+  │         │                 │                     │               │
+  │   Feature-rich      Lightweight           FIPS-certified        │
+  │   Large footprint   ~100KB RAM            Dual-license          │
+  │   Hardware engines  mbedTLS engines       wolfEngine (OEM)      │
+  │         │                 │                     │               │
+  │   ┌─────┴─────────────────┴─────────────────────┴───────────┐   │
+  │   │              PKCS#11 Abstraction Layer                  │   │
+  │   │         (p11-kit / SoftHSM / Hardware HSM)              │   │
+  │   └─────────────────────────────────────────────────────────┘   │
+  │                           │                                     │
+  │            ┌──────────────┴───────────────┐                     │
+  │            │ Applications (C / C++ / Rust)│                     │
+  │            └──────────────────────────────┘                     │
+  └─────────────────────────────────────────────────────────────────┘
+```
+
+This chapter covers: library selection criteria, Buildroot `menuconfig` settings, certificate deployment strategies, C/C++ TLS programming patterns, hardware crypto engine integration, PKCS#11 usage, and Rust-based TLS with `rustls`.
+
+---
+
+## Library Comparison
+
+### Feature Matrix
+
+```
+  ┌──────────────────────┬────────────────┬────────────────┬────────────────┐
+  │ Feature              │   OpenSSL 3.x  │   mbedTLS 3.x  │   WolfSSL 5.x  │
+  ├──────────────────────┼────────────────┼────────────────┼────────────────┤
+  │ TLS 1.3 support      │     YES        │     YES        │     YES        │
+  │ TLS 1.2 support      │     YES        │     YES        │     YES        │
+  │ DTLS support         │     YES        │     YES        │     YES        │
+  │ Footprint (shared)   │  ~3-5 MB       │  ~300 KB       │  ~400-600 KB   │
+  │ Footprint (static)   │  ~2-4 MB       │  ~60-200 KB    │  ~150-500 KB   │
+  │ RAM usage (idle)     │  ~2 MB         │  ~50-100 KB    │  ~100-200 KB   │
+  │ FIPS 140-2/3         │  YES (FIPS mod)│     NO         │     YES        │
+  │ Hardware accel API   │  OpenSSL Eng.  │  mbedTLS HAL   │  wolfEngine    │
+  │ PKCS#11              │  p11-kit/eng.  │  PKCS#11 mod   │  wolfPKCS11    │
+  │ Buildroot package    │BR2_PACKAGE_    │BR2_PACKAGE_    │BR2_PACKAGE_    │
+  │                      │OPENSSL         │MBEDTLS         │WOLFSSL         │
+  │ Rust bindings        │ openssl crate  │ mbedtls crate  │ wolfssl crate  │
+  │ License              │ Apache 2.0     │ Apache 2.0     │ GPL2/Commercial│
+  │ Common use case      │ General Linux  │ MCU/constrained│ Certified IoT  │
+  └──────────────────────┴────────────────┴────────────────┴────────────────┘
+```
+
+### When to Choose Which Library
+
+```
+  Decision Tree:
+  
+  START
+    │
+    ├─► Does your target have < 512 KB RAM?
+    │         YES ──► mbedTLS   (smallest footprint, no external deps)
+    │         NO  ──► continue
+    │
+    ├─► Do you need FIPS 140-2/3 certification?
+    │         YES ──► WolfSSL (FIPS edition) or OpenSSL (FIPS module)
+    │         NO  ──► continue
+    │
+    ├─► Are you targeting a standard Linux system (glibc)?
+    │         YES ──► OpenSSL  (widest software ecosystem, most compatible)
+    │         NO  ──► continue
+    │
+    ├─► Minimal musl/uClibc system with strict size budget?
+    │         YES ──► mbedTLS or WolfSSL (can disable unused algorithms)
+    │         NO  ──► OpenSSL
+    │
+    └─► END
 ```
 
 ---
 
-## Why Security Hardening Matters in Embedded Systems
+## Buildroot Configuration
 
-Embedded Linux systems occupy an increasingly hostile environment: IoT devices exposed to the internet, industrial controllers on flat networks, automotive ECUs with remote-update channels, and medical equipment with USB ports. Unlike desktop systems, embedded targets often:
-
-- Run a single long-lived firmware image for years without patches.
-- Lack runtime exploit mitigations (ASLR may be weak on 32-bit targets).
-- Ship with default credentials or open services.
-- Are physically accessible to adversaries.
-
-The compiler and linker hardening flags described in this chapter impose virtually zero runtime cost while dramatically raising the cost of exploiting memory-corruption vulnerabilities. They are a mandatory baseline for any production Buildroot image.
+### menuconfig Selections
 
 ```
-  Attack Surface Reduction Model
-  ═══════════════════════════════
-
-  BEFORE hardening                AFTER hardening
-  ─────────────────               ──────────────────
-  Stack buffer overflow           Canary detects overwrite
-  ┌─────────────────┐             ┌──────────────────────┐
-  │ buf[16]         │             │ buf[16]              │
-  │ saved RIP ◄─ !! │             │ canary  ◄─ checked   │
-  │ ret addr        │             │ saved RIP            │
-  └─────────────────┘             └──────────────────────┘
-
-  GOT overwrite (no RELRO)        Read-only GOT (FULL RELRO)
-  ┌───────────┐                   ┌───────────────────────┐
-  │ GOT entry │ ◄── writable      │ GOT entry  read-only  │
-  │ .got.plt  │     exploitable   │ .got.plt   mprotect'd │
-  └───────────┘                   └───────────────────────┘
-
-  Known libc addresses            ASLR + PIE randomises base
-  text = 0x08048000 (fixed)       text = 0x5a3f1000 (random)
+  Buildroot menuconfig navigation:
+  
+  Target packages
+    └── Libraries
+          └── Security (crypto & TLS)
+  
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │                  Security/crypto library options                         │
+  │                                                                          │
+  │  [ ] botan                                                               │
+  │  [*] openssl                                                             │
+  │        openssl variant (openssl)  --->                                   │
+  │        [ ] openssl additional engines                                    │
+  │        [ ] openssl force soft abi                                        │
+  │  [ ] mbedtls                                                             │
+  │        [ ] mbedtls benchmark program                                     │
+  │        [ ] mbedtls test programs                                         │
+  │  [ ] wolfssl                                                             │
+  │        wolfssl features  --->                                            │
+  │  [ ] p11-kit                   (PKCS#11 abstraction)                     │
+  │  [ ] softhsm2                  (software HSM for testing)                │
+  │  [ ] tpm2-tss                  (TPM 2.0 software stack)                  │
+  └──────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## Compiler Hardening Flags
-
-### `-fstack-protector-strong`
-
-Inserts a random canary value between local variables and the saved return address. On function exit the canary is checked; a mismatch causes an immediate `__stack_chk_fail()` abort. The `-strong` variant instruments all functions that declare arrays, take addresses of locals, or call `alloca` — a much better coverage than the older plain `-fstack-protector`.
+### Buildroot Config Fragments
 
 ```
-  Stack frame WITH -fstack-protector-strong
-  ─────────────────────────────────────────
-  High addresses
-  ┌──────────────────────┐
-  │  caller's frame      │
-  ├──────────────────────┤  ◄── frame base (rbp / fp)
-  │  saved return addr   │
-  │  saved frame pointer │
-  ├──────────────────────┤
-  │  STACK CANARY        │  ◄── random 8-byte value
-  ├──────────────────────┤       checked on return
-  │  local variables     │
-  │    int  x            │
-  │    char buf[64]      │  ◄── overflow target
-  │    ...               │
-  ├──────────────────────┤
-  │  (red zone / align)  │
-  └──────────────────────┘
-  Low addresses
+# configs/my_device_crypto_defconfig
+
+# Choose ONE primary TLS library:
+BR2_PACKAGE_OPENSSL=y
+# BR2_PACKAGE_MBEDTLS=y
+# BR2_PACKAGE_WOLFSSL=y
+
+# OpenSSL specific — hardware engine support
+BR2_PACKAGE_OPENSSL_ENGINES=y
+
+# PKCS#11 support layer
+BR2_PACKAGE_P11_KIT=y
+
+# If using TPM
+BR2_PACKAGE_TPM2_TSS=y
+BR2_PACKAGE_TPM2_TOOLS=y
+
+# CA certificates bundle
+BR2_PACKAGE_CA_CERTIFICATES=y
+
+# For Rust TLS applications
+BR2_PACKAGE_HOST_RUSTC=y
+BR2_PACKAGE_RUSTFMT=y
 ```
 
-### `-D_FORTIFY_SOURCE=2`
-
-Enables compile-time and runtime bounds checking on common libc functions (`memcpy`, `strcpy`, `sprintf`, `read`, `write`, etc.). At level 2, calls where the buffer size is statically known are verified; unknown-size calls get runtime wrappers (`__memcpy_chk`, `__sprintf_chk`, etc.).
-
-Requires `-O1` or higher to be effective because the compiler must be able to determine buffer sizes.
-
-### `-fPIE` / `-pie`
-
-`-fPIE` (compile) and `-pie` (link) produce a Position-Independent Executable. Combined with the kernel's Address Space Layout Randomisation (ASLR), every run loads the executable at a different base address, making ROP-chain construction dramatically harder.
-
-```
-  Virtual Memory Layout
-
-  Without PIE          With PIE + ASLR
-  ────────────         ───────────────
-  0x08048000 [text]    0x5571a000 [text]   ← random each run
-  0x0804a000 [data]    0x5571c000 [data]
-  0xf7e00000 [libc]    0x7f3e5000 [libc]   ← independent random
-  0xffffd000 [stack]   0x7ffd3000 [stack]  ← independent random
-```
-
-### `-Wl,-z,relro` and `-Wl,-z,now`
-
-These are linker flags (passed via `-Wl`):
-
-- `-z relro` marks the GOT and other relocatable sections read-only after startup dynamic linking is complete (partial RELRO).
-- `-z now` forces all symbol resolution at load time (no lazy binding), allowing the entire `.got.plt` to be made read-only (full RELRO).
-
----
-
-## Buildroot Security Configuration Options
-
-Buildroot exposes hardening settings through `make menuconfig` under **Build options → Security hardening options**.
-
-```
-  menuconfig tree (abbreviated)
-  ══════════════════════════════
-
-  Build options
-  └── Security hardening options
-      ├── [*] Stack Smashing Protection
-      │       (BR2_SSP_REGULAR / STRONG / ALL)
-      │
-      ├── [*] FORTIFY_SOURCE support
-      │       (BR2_FORTIFY_SOURCE_1 / 2)
-      │
-      ├── [*] Position Independent Executables (PIE)
-      │       (BR2_PIE)
-      │
-      ├── [*] RELRO protection
-      │       (BR2_RELRO_PARTIAL / FULL)
-      │
-      └── [*] Strip binaries
-              (BR2_STRIP_strip / sstrip / none)
-```
-
-### `BR2_SSP_*` Options
-
-| Kconfig symbol       | GCC flags added              | Coverage                        |
-|----------------------|------------------------------|---------------------------------|
-| `BR2_SSP_NONE`       | (none)                       | No protection                   |
-| `BR2_SSP_REGULAR`    | `-fstack-protector`          | Functions with 8+ byte buffers  |
-| `BR2_SSP_STRONG`     | `-fstack-protector-strong`   | Arrays, alloca, address-taken   |
-| `BR2_SSP_ALL`        | `-fstack-protector-all`      | Every function (high overhead)  |
-
-### `BR2_RELRO_*` Options
-
-| Kconfig symbol          | Linker flags                        | Effect                       |
-|-------------------------|-------------------------------------|------------------------------|
-| `BR2_RELRO_NONE`        | (none)                              | Writable GOT                 |
-| `BR2_RELRO_PARTIAL`     | `-Wl,-z,relro`                      | Partial read-only GOT        |
-| `BR2_RELRO_FULL`        | `-Wl,-z,relro,-z,now`               | Full read-only GOT + eager   |
-
-These symbols inject flags via `TARGET_CFLAGS` and `TARGET_LDFLAGS` in Buildroot's `package/Makefile.in` infrastructure, so every package using the standard build system inherits them automatically.
-
-### Example `defconfig` fragment
+### OpenSSL Configuration File — Embedded Minimal
 
 ```ini
-# Security hardening — paste into your board defconfig
-BR2_SSP_STRONG=y
-BR2_FORTIFY_SOURCE_2=y
-BR2_PIE=y
-BR2_RELRO_FULL=y
-BR2_STRIP_strip=y
+# /etc/ssl/openssl.cnf (trimmed for embedded)
+openssl_conf = openssl_init
+
+[openssl_init]
+providers = provider_sect
+engines   = engine_section
+
+[provider_sect]
+default = default_sect
+
+[default_sect]
+activate = 1
+
+[engine_section]
+# Uncomment for hardware engine, e.g., cryptodev
+# cryptodev = cryptodev_section
+
+# [cryptodev_section]
+# engine_id  = cryptodev
+# dynamic_path = /usr/lib/engines-3/cryptodev.so
+# CIPHERS    = AES-128-CBC:AES-256-CBC
+# DIGESTS    = SHA1:SHA256
+# init       = 1
+
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions    = v3_ca
+prompt             = no
+
+[req_distinguished_name]
+CN = MyEmbeddedDevice
+O  = MyOrg
+C  = DE
 ```
 
 ---
 
-## Stripping SUID Binaries
+## Certificate Deployment
 
-SUID (Set-User-ID) binaries execute with the file owner's privileges regardless of which user runs them. In a minimal embedded rootfs most SUID binaries are unnecessary and represent a privilege escalation vector.
-
-### Finding SUID Binaries in the Staging Tree
-
-```bash
-# Run inside the Buildroot output/target directory
-find output/target -perm /4000 -ls 2>/dev/null
-```
+### Certificate Storage Layout
 
 ```
-  Typical SUID candidates in a Buildroot image
-  ─────────────────────────────────────────────
-  /usr/bin/passwd       ← needed if users change passwords
-  /usr/bin/su           ← needed only if multi-user
-  /bin/busybox          ← if busybox is SUID-installed
-  /usr/bin/ping         ← needs raw socket; use cap_net_raw instead
+  /etc/ssl/ layout on target:
+  
+  /etc/ssl/
+  ├── certs/
+  │   ├── ca-certificates.crt    ← bundle (ca-certificates package)
+  │   ├── my-root-ca.crt         ← custom root CA
+  │   └── device-cert.crt        ← this device's certificate
+  ├── private/
+  │   └── device-key.pem         ← private key (chmod 600!)
+  └── openssl.cnf
+
+  Buildroot overlay method:
+  board/mydevice/rootfs_overlay/
+  └── etc/
+      └── ssl/
+          ├── certs/
+          │   └── my-root-ca.crt
+          └── private/
+              └── device-key.pem   ← provisioned at factory
 ```
 
-### Removing SUID in a Post-build Script
-
-Buildroot allows a `BR2_ROOTFS_POST_BUILD_SCRIPT` to run after all packages are installed but before image creation.
+### Generating Device Certificates
 
 ```bash
 #!/bin/sh
-# board/myboard/post-build.sh
-# Strip SUID/SGID bits from all binaries except those explicitly allowed
+# scripts/gen_device_certs.sh
+# Run during factory provisioning or first-boot init
 
-TARGET="$1"
-ALLOWED="
-/bin/busybox
-"
+DEVICE_ID=$(cat /proc/cpuinfo | grep Serial | awk '{print $3}')
+KEY_FILE=/etc/ssl/private/device-key.pem
+CERT_FILE=/etc/ssl/certs/device-cert.crt
+CSR_FILE=/tmp/device.csr
+CA_CERT=/etc/ssl/certs/my-root-ca.crt
+CA_KEY=/etc/ssl/private/my-root-ca-key.pem  # kept on signing server
 
-find "${TARGET}" -perm /6000 | while read -r f; do
-    base="${f#${TARGET}}"
-    keep=0
-    for a in ${ALLOWED}; do
-        [ "$base" = "$a" ] && keep=1 && break
-    done
-    if [ $keep -eq 0 ]; then
-        echo "[hardening] removing SUID/SGID from ${base}"
-        chmod ug-s "${TARGET}${base}"
-    fi
-done
-```
+# Generate EC key (preferred over RSA for embedded)
+openssl ecparam -name prime256v1 -genkey -noout -out $KEY_FILE
+chmod 600 $KEY_FILE
 
-Register it in your `defconfig`:
+# Create CSR
+openssl req -new -key $KEY_FILE \
+  -subj "/CN=device-${DEVICE_ID}/O=MyOrg/C=DE" \
+  -out $CSR_FILE
 
-```ini
-BR2_ROOTFS_POST_BUILD_SCRIPT="board/myboard/post-build.sh"
-```
+# Sign with CA (on production server — shown here for demo)
+openssl x509 -req -in $CSR_FILE \
+  -CA $CA_CERT -CAkey $CA_KEY \
+  -CAcreateserial \
+  -days 3650 \
+  -sha256 \
+  -out $CERT_FILE
 
----
-
-## Removing Development Tools
-
-Every compiler, debugger, assembler, or interpreter left in the target rootfs is a free exploit-development toolkit for an attacker who has gained initial access.
-
-### What to Exclude
-
-```
-  Development tool categories to exclude from target
-  ───────────────────────────────────────────────────
-  Compilers        gcc, g++, clang, tcc
-  Assemblers       as, nasm, yasm
-  Debuggers        gdb, gdbserver, strace, ltrace
-  Interpreters     python3, perl, lua (if not needed at runtime)
-  Build tools      make, cmake, pkgconf, autoconf
-  Linkers          ld, gold, lld (only needed on host)
-  Headers          /usr/include/** (strip package)
-  Static libs      *.a (strip package or BR2_PACKAGE_*_STATIC=n)
-```
-
-### Buildroot Package Exclusion
-
-Most development packages are simply not selected. The strip step handles libraries:
-
-```ini
-# Ensure no dev-only packages sneak in
-# (these are typically off by default but worth verifying)
-# BR2_PACKAGE_GDB is not set
-# BR2_PACKAGE_STRACE is not set
-# BR2_PACKAGE_LTRACE is not set
-# BR2_PACKAGE_PYTHON3 is not set   (if not needed at runtime)
-BR2_STRIP_strip=y
-BR2_PREFER_STATIC_LIB=n           # avoid pulling in .a files
-```
-
-### Post-image Audit One-liner
-
-```bash
-# Check for unexpected binaries with executable stacks or no RELRO
-find output/target/usr/bin output/target/bin \
-    -type f -executable \
-    -exec sh -c 'readelf -l "$1" 2>/dev/null | grep -q GNU_STACK \
-        || echo "no GNU_STACK: $1"' _ {} \;
+echo "Certificate deployed: $CERT_FILE"
 ```
 
 ---
 
-## Stack Protection in Practice — C Examples
+## TLS Client & Server in C
 
-### Example 1: Demonstrating Stack Canary Detection (C)
-
-```c
-/*
- * stack_demo.c
- *
- * Compile with:    gcc -fstack-protector-strong -O2 -o stack_demo stack_demo.c
- * Compile without: gcc -fno-stack-protector   -O2 -o stack_demo_unsafe stack_demo.c
- *
- * The safe version aborts via __stack_chk_fail() before the
- * attacker's overwritten return address can be used.
- */
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-/* Intentionally vulnerable function — DO NOT ship this */
-static void vulnerable(const char *user_input)
-{
-    char buf[32];
-    /*
-     * strcpy does not check length; input > 32 chars overwrites
-     * the stack canary, triggering abort() before returning.
-     */
-    strcpy(buf, user_input);
-    printf("buf = %s\n", buf);
-}
-
-int main(int argc, char *argv[])
-{
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <input>\n", argv[0]);
-        return 1;
-    }
-    vulnerable(argv[1]);
-    return 0;
-}
-
-/*
- * ASCII diagram of what happens at runtime:
- *
- *   stack_demo <"AAAA...AAAA"> (64 A's)
- *
- *   High  ┌─────────────────┐
- *         │  return address │ ← attacker wants to reach here
- *         ├─────────────────┤
- *         │  saved RBP      │
- *         ├─────────────────┤
- *         │  CANARY  0x??   │ ← gets overwritten with 0x41414141...
- *         ├─────────────────┤    __stack_chk_fail() fires
- *         │  buf[32]        │ ← starts here, overflows upward
- *   Low   └─────────────────┘
- *
- * Result: "*** stack smashing detected ***: terminated"
- */
-```
-
-### Example 2: Safe String Handling Avoiding SSP Triggers (C)
+### TLS Client with OpenSSL (C)
 
 ```c
-/*
- * safe_strings.c
- *
- * Demonstrates correct string handling patterns that work
- * alongside -fstack-protector-strong without false positives.
- *
- * Compile: gcc -fstack-protector-strong -D_FORTIFY_SOURCE=2 -O2 \
- *              -fPIE -pie -o safe_strings safe_strings.c
+/* tls_client_openssl.c
+ * Simple TLS 1.3 client using OpenSSL
+ * Build: gcc tls_client_openssl.c -o tls_client -lssl -lcrypto
  */
+
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <stddef.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
-#define MAX_NAME_LEN  63
-#define MAX_PATH_LEN 255
+#define HOST        "api.example.com"
+#define PORT        "443"
+#define CA_BUNDLE   "/etc/ssl/certs/ca-certificates.crt"
 
-typedef struct {
-    char name[MAX_NAME_LEN + 1];
-    char path[MAX_PATH_LEN + 1];
-    int  flags;
-} config_entry_t;
-
-/*
- * Safe config parser: uses snprintf / strnlen everywhere.
- * -D_FORTIFY_SOURCE=2 wraps these with runtime size checks
- * when sizes are statically known.
- */
-static int parse_entry(const char *raw_name,
-                       const char *raw_path,
-                       config_entry_t *out)
+static int tcp_connect(const char *host, const char *port)
 {
-    if (!raw_name || !raw_path || !out)
+    struct addrinfo hints = {0}, *res, *rp;
+    int fd = -1;
+
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(host, port, &hints, &res) != 0)
         return -1;
 
-    /* strnlen prevents scanning past the buffer boundary */
-    size_t name_len = strnlen(raw_name, MAX_NAME_LEN + 1);
-    if (name_len > MAX_NAME_LEN) {
-        fprintf(stderr, "name too long (%zu > %d)\n",
-                name_len, MAX_NAME_LEN);
-        return -1;
+    for (rp = res; rp; rp = rp->ai_next) {
+        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
+        close(fd);
+        fd = -1;
     }
-
-    /* snprintf always NUL-terminates; returns chars that would   *
-     * have been written, letting us detect truncation.           */
-    int r = snprintf(out->name, sizeof(out->name), "%s", raw_name);
-    if (r < 0 || (size_t)r >= sizeof(out->name))
-        return -1;
-
-    r = snprintf(out->path, sizeof(out->path), "%s", raw_path);
-    if (r < 0 || (size_t)r >= sizeof(out->path))
-        return -1;
-
-    out->flags = 0;
-    return 0;
+    freeaddrinfo(res);
+    return fd;
 }
 
 int main(void)
 {
-    config_entry_t e;
-    if (parse_entry("sensor_module", "/dev/ttyS0", &e) == 0)
-        printf("name=%s  path=%s\n", e.name, e.path);
-    return 0;
+    SSL_CTX *ctx = NULL;
+    SSL     *ssl = NULL;
+    int      fd  = -1;
+    int      ret = EXIT_FAILURE;
+
+    /* ── Initialize OpenSSL ─────────────────────────────────────── */
+    OPENSSL_init_ssl(0, NULL);
+    ERR_load_crypto_strings();
+
+    /* ── Create TLS context ─────────────────────────────────────── */
+    ctx = SSL_CTX_new(TLS_client_method());
+    if (!ctx) { ERR_print_errors_fp(stderr); goto cleanup; }
+
+    /* ── Enforce TLS 1.2 minimum ────────────────────────────────── */
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+
+    /* ── Load trusted CA bundle ─────────────────────────────────── */
+    if (!SSL_CTX_load_verify_locations(ctx, CA_BUNDLE, NULL)) {
+        fprintf(stderr, "Cannot load CA bundle: %s\n", CA_BUNDLE);
+        goto cleanup;
+    }
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+
+    /* ── Optional: load client certificate (mTLS) ───────────────── */
+    /* SSL_CTX_use_certificate_file(ctx, "/etc/ssl/certs/device-cert.crt",
+                                      SSL_FILETYPE_PEM);
+       SSL_CTX_use_PrivateKey_file(ctx, "/etc/ssl/private/device-key.pem",
+                                      SSL_FILETYPE_PEM); */
+
+    /* ── TCP connection ─────────────────────────────────────────── */
+    fd = tcp_connect(HOST, PORT);
+    if (fd < 0) { perror("connect"); goto cleanup; }
+
+    /* ── TLS handshake ──────────────────────────────────────────── */
+    ssl = SSL_new(ctx);
+    SSL_set_fd(ssl, fd);
+    SSL_set_tlsext_host_name(ssl, HOST);   /* SNI */
+
+    if (SSL_connect(ssl) != 1) {
+        ERR_print_errors_fp(stderr);
+        goto cleanup;
+    }
+
+    printf("Connected: %s  Cipher: %s\n",
+           SSL_get_version(ssl),
+           SSL_get_cipher(ssl));
+
+    /* ── HTTP GET ───────────────────────────────────────────────── */
+    const char *req =
+        "GET /api/status HTTP/1.1\r\n"
+        "Host: " HOST "\r\n"
+        "Connection: close\r\n\r\n";
+
+    SSL_write(ssl, req, (int)strlen(req));
+
+    char buf[4096];
+    int  n;
+    while ((n = SSL_read(ssl, buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = '\0';
+        printf("%s", buf);
+    }
+
+    ret = EXIT_SUCCESS;
+
+cleanup:
+    if (ssl) { SSL_shutdown(ssl); SSL_free(ssl); }
+    if (fd >= 0) close(fd);
+    SSL_CTX_free(ctx);
+    return ret;
 }
 ```
 
-### Example 3: Checking Hardening Flags at Runtime (C)
+### TLS Client with mbedTLS (C)
 
 ```c
-/*
- * check_hardening.c
- *
- * A small diagnostic that reports which protections are active
- * in the current binary.  Useful in a post-install test suite.
- *
- * Compile: gcc -o check_hardening check_hardening.c
- * Run:     readelf -s check_hardening | grep chk
- *          checksec --file=check_hardening
+/* tls_client_mbedtls.c
+ * TLS 1.3 client using mbedTLS — suitable for constrained devices
+ * Build: gcc tls_client_mbedtls.c -o tls_client_mbed -lmbedtls -lmbedcrypto -lmbedx509
  */
+
 #include <stdio.h>
+#include <string.h>
+#include "mbedtls/net_sockets.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/error.h"
 
-/* __stack_chk_guard is defined by glibc when SSP is active */
-extern uintptr_t __stack_chk_guard __attribute__((weak));
-
-/* __sprintf_chk is one of the FORTIFY_SOURCE wrappers */
-extern int __sprintf_chk(char *, int, size_t, const char *, ...)
-    __attribute__((weak));
+#define HOST     "api.example.com"
+#define PORT     "443"
+#define CA_FILE  "/etc/ssl/certs/my-root-ca.crt"
 
 int main(void)
 {
-    puts("=== Binary hardening self-check ===");
+    mbedtls_net_context       server_fd;
+    mbedtls_entropy_context   entropy;
+    mbedtls_ctr_drbg_context  ctr_drbg;
+    mbedtls_ssl_context       ssl;
+    mbedtls_ssl_config        conf;
+    mbedtls_x509_crt          cacert;
+    int ret;
+    char err_buf[256];
 
-    /* Stack Smashing Protection */
-    if (&__stack_chk_guard)
-        printf("[SSP]     Stack canary ACTIVE  (guard = %p)\n",
-               (void *)(uintptr_t)__stack_chk_guard);
-    else
-        puts("[SSP]     Stack canary NOT active");
+    /* ── Initialize structures ──────────────────────────────────── */
+    mbedtls_net_init(&server_fd);
+    mbedtls_ssl_init(&ssl);
+    mbedtls_ssl_config_init(&conf);
+    mbedtls_x509_crt_init(&cacert);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_entropy_init(&entropy);
 
-    /* FORTIFY_SOURCE */
-    if (&__sprintf_chk)
-        puts("[FORTIFY] FORTIFY_SOURCE wrappers ACTIVE");
-    else
-        puts("[FORTIFY] FORTIFY_SOURCE NOT active");
+    /* ── Seed the RNG ───────────────────────────────────────────── */
+    const char *pers = "tls_client";
+    ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func,
+                                 &entropy,
+                                 (const unsigned char *)pers, strlen(pers));
+    if (ret != 0) goto exit;
 
-    /* PIE: check if the load address is high (ASLR randomised) */
-    uintptr_t text_addr = (uintptr_t)main;
-    if (text_addr > 0x100000UL)
-        printf("[PIE]     Appears to be PIE (main @ %p)\n",
-               (void *)text_addr);
-    else
-        printf("[PIE]     Fixed text address (main @ %p)\n",
-               (void *)text_addr);
+    /* ── Load CA certificate ────────────────────────────────────── */
+    ret = mbedtls_x509_crt_parse_file(&cacert, CA_FILE);
+    if (ret != 0) { fprintf(stderr, "Cannot load CA: %s\n", CA_FILE); goto exit; }
 
-    return 0;
+    /* ── Connect ────────────────────────────────────────────────── */
+    ret = mbedtls_net_connect(&server_fd, HOST, PORT, MBEDTLS_NET_PROTO_TCP);
+    if (ret != 0) goto exit;
+
+    /* ── Configure TLS ──────────────────────────────────────────── */
+    ret = mbedtls_ssl_config_defaults(&conf,
+                                      MBEDTLS_SSL_IS_CLIENT,
+                                      MBEDTLS_SSL_TRANSPORT_STREAM,
+                                      MBEDTLS_SSL_PRESET_DEFAULT);
+    if (ret != 0) goto exit;
+
+    mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+    mbedtls_ssl_conf_ca_chain(&conf, &cacert, NULL);
+    mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
+
+    /* ── Set minimum TLS version ────────────────────────────────── */
+    mbedtls_ssl_conf_min_tls_version(&conf, MBEDTLS_SSL_VERSION_TLS1_2);
+
+    ret = mbedtls_ssl_setup(&ssl, &conf);
+    if (ret != 0) goto exit;
+
+    mbedtls_ssl_set_hostname(&ssl, HOST);  /* SNI + peer CN check */
+    mbedtls_ssl_set_bio(&ssl, &server_fd,
+                        mbedtls_net_send,
+                        mbedtls_net_recv, NULL);
+
+    /* ── Handshake ──────────────────────────────────────────────── */
+    while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ &&
+            ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            mbedtls_strerror(ret, err_buf, sizeof(err_buf));
+            fprintf(stderr, "Handshake failed: %s\n", err_buf);
+            goto exit;
+        }
+    }
+
+    printf("Connected via %s\n", mbedtls_ssl_get_version(&ssl));
+
+    /* ── Write HTTP GET ─────────────────────────────────────────── */
+    const char *req = "GET /api/status HTTP/1.1\r\nHost: " HOST "\r\n"
+                      "Connection: close\r\n\r\n";
+    size_t written = 0, len = strlen(req);
+    while (written < len) {
+        ret = mbedtls_ssl_write(&ssl,
+                                (const unsigned char *)req + written,
+                                len - written);
+        if (ret < 0 && ret != MBEDTLS_ERR_SSL_WANT_WRITE) goto exit;
+        if (ret > 0) written += (size_t)ret;
+    }
+
+    /* ── Read response ──────────────────────────────────────────── */
+    unsigned char buf[1024];
+    do {
+        ret = mbedtls_ssl_read(&ssl, buf, sizeof(buf) - 1);
+        if (ret > 0) { buf[ret] = 0; printf("%s", buf); }
+    } while (ret > 0 ||
+             ret == MBEDTLS_ERR_SSL_WANT_READ);
+
+    mbedtls_ssl_close_notify(&ssl);
+
+exit:
+    mbedtls_net_free(&server_fd);
+    mbedtls_x509_crt_free(&cacert);
+    mbedtls_ssl_free(&ssl);
+    mbedtls_ssl_config_free(&conf);
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
+    return ret != 0 ? 1 : 0;
 }
 ```
 
 ---
 
-## Position-Independent Executables — C++ Examples
+## TLS in C++ — RAII Wrappers
 
-### Example 4: PIE-compatible Shared Service in C++
+C++ RAII (Resource Acquisition Is Initialization) wrappers eliminate the common mistake of forgetting to free OpenSSL objects, and model TLS sessions as proper value types.
 
 ```cpp
-/*
- * hardened_service.cpp
- *
- * A minimal socket-based service compiled as PIE so ASLR
- * randomises its load address on every execution.
- *
- * Compile:
- *   g++ -std=c++17 -fPIE -pie \
- *       -fstack-protector-strong \
- *       -D_FORTIFY_SOURCE=2 \
- *       -Wl,-z,relro,-z,now \
- *       -O2 -o hardened_service hardened_service.cpp
- *
- * Verify:
- *   readelf -d hardened_service | grep BIND_NOW
- *   readelf -l hardened_service | grep GNU_RELRO
+// tls_raii.hpp
+// C++17 RAII wrappers for OpenSSL
+// Build: g++ -std=c++17 tls_raii.cpp -o tls_demo -lssl -lcrypto
+
+#pragma once
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace tls {
+
+// ── Deleter types ──────────────────────────────────────────────────
+struct SslCtxDeleter  { void operator()(SSL_CTX *p) const noexcept { SSL_CTX_free(p); } };
+struct SslDeleter     { void operator()(SSL     *p) const noexcept { SSL_free(p);     } };
+
+using SslCtxPtr = std::unique_ptr<SSL_CTX, SslCtxDeleter>;
+using SslPtr    = std::unique_ptr<SSL,     SslDeleter>;
+
+// ── TLS configuration ──────────────────────────────────────────────
+struct Config {
+    std::string ca_bundle    = "/etc/ssl/certs/ca-certificates.crt";
+    std::string client_cert;       // empty = no mTLS
+    std::string client_key;
+    int         min_tls_version = TLS1_2_VERSION;
+    bool        verify_peer     = true;
+};
+
+// ── Error helpers ──────────────────────────────────────────────────
+[[noreturn]] inline void throw_ssl_error(std::string_view msg)
+{
+    char buf[256];
+    ERR_error_string_n(ERR_get_error(), buf, sizeof(buf));
+    throw std::runtime_error(std::string(msg) + ": " + buf);
+}
+
+// ── Context builder ────────────────────────────────────────────────
+inline SslCtxPtr make_client_context(const Config &cfg)
+{
+    SslCtxPtr ctx{ SSL_CTX_new(TLS_client_method()) };
+    if (!ctx) throw_ssl_error("SSL_CTX_new");
+
+    SSL_CTX_set_min_proto_version(ctx.get(), cfg.min_tls_version);
+
+    if (cfg.verify_peer) {
+        SSL_CTX_set_verify(ctx.get(), SSL_VERIFY_PEER, nullptr);
+        if (!SSL_CTX_load_verify_locations(ctx.get(),
+                                           cfg.ca_bundle.c_str(), nullptr))
+            throw_ssl_error("load CA bundle");
+    } else {
+        SSL_CTX_set_verify(ctx.get(), SSL_VERIFY_NONE, nullptr);
+    }
+
+    if (!cfg.client_cert.empty()) {
+        if (!SSL_CTX_use_certificate_file(ctx.get(),
+                cfg.client_cert.c_str(), SSL_FILETYPE_PEM))
+            throw_ssl_error("load client cert");
+        if (!SSL_CTX_use_PrivateKey_file(ctx.get(),
+                cfg.client_key.c_str(), SSL_FILETYPE_PEM))
+            throw_ssl_error("load client key");
+        if (!SSL_CTX_check_private_key(ctx.get()))
+            throw_ssl_error("private key mismatch");
+    }
+    return ctx;
+}
+
+// ── TLS session class ──────────────────────────────────────────────
+class Session {
+public:
+    explicit Session(SSL_CTX *ctx, int fd, std::string_view hostname)
+        : ssl_{ SSL_new(ctx) }
+    {
+        if (!ssl_) throw_ssl_error("SSL_new");
+        SSL_set_fd(ssl_.get(), fd);
+        SSL_set_tlsext_host_name(ssl_.get(), hostname.data());
+
+        if (SSL_connect(ssl_.get()) != 1)
+            throw_ssl_error("SSL_connect");
+    }
+
+    ~Session() noexcept
+    {
+        if (ssl_) SSL_shutdown(ssl_.get());
+    }
+
+    // Non-copyable, movable
+    Session(const Session &) = delete;
+    Session &operator=(const Session &) = delete;
+    Session(Session &&)                 = default;
+
+    std::string version()  const { return SSL_get_version(ssl_.get()); }
+    std::string cipher()   const { return SSL_get_cipher(ssl_.get()); }
+
+    void write(std::string_view data)
+    {
+        size_t off = 0;
+        while (off < data.size()) {
+            int n = SSL_write(ssl_.get(),
+                              data.data() + off,
+                              static_cast<int>(data.size() - off));
+            if (n <= 0) throw_ssl_error("SSL_write");
+            off += static_cast<size_t>(n);
+        }
+    }
+
+    std::string read_all()
+    {
+        std::string result;
+        char buf[4096];
+        int  n;
+        while ((n = SSL_read(ssl_.get(), buf, sizeof(buf))) > 0)
+            result.append(buf, static_cast<size_t>(n));
+        return result;
+    }
+
+private:
+    SslPtr ssl_;
+};
+
+} // namespace tls
+
+
+// ── Usage example ──────────────────────────────────────────────────
+// tls_raii_demo.cpp
+
+#include "tls_raii.hpp"
+#include <iostream>
+#include <netdb.h>
+#include <unistd.h>
+#include <sys/socket.h>
+
+static int tcp_connect(const char *host, const char *port)
+{
+    addrinfo hints{}, *res;
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(host, port, &hints, &res) != 0) return -1;
+    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    connect(fd, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res);
+    return fd;
+}
+
+int main()
+{
+    constexpr auto HOST = "api.example.com";
+    constexpr auto PORT = "443";
+
+    try {
+        tls::Config cfg;
+        cfg.ca_bundle        = "/etc/ssl/certs/ca-certificates.crt";
+        cfg.min_tls_version  = TLS1_3_VERSION;  // TLS 1.3 only
+
+        auto ctx = tls::make_client_context(cfg);
+
+        int fd = tcp_connect(HOST, PORT);
+        if (fd < 0) throw std::runtime_error("TCP connect failed");
+
+        tls::Session session{ ctx.get(), fd, HOST };
+
+        std::cout << "TLS version : " << session.version() << "\n"
+                  << "Cipher suite: " << session.cipher()  << "\n";
+
+        session.write("GET /api/data HTTP/1.1\r\nHost: "
+                      + std::string(HOST) + "\r\nConnection: close\r\n\r\n");
+
+        auto resp = session.read_all();
+        std::cout << resp << "\n";
+
+        close(fd);
+    }
+    catch (const std::exception &ex) {
+        std::cerr << "Error: " << ex.what() << "\n";
+        return 1;
+    }
+    return 0;
+}
+```
+
+---
+
+## Hardware Crypto Engine Integration
+
+Many embedded SoCs (NXP i.MX, STM32MP1, Broadcom BCM, etc.) include hardware crypto accelerators. Buildroot supports these via kernel drivers and OpenSSL engine plugins.
+
+### Architecture
+
+```
+  Software stack with hardware crypto acceleration:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Application (C / C++ / Rust)                                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  OpenSSL 3.x  ─── EVP API (cipher/digest/asymmetric)            │
+  ├────────────────────┬────────────────────────────────────────────┤
+  │  Software provider │  Hardware provider (Engine / Provider)     │
+  │  (default)         │  e.g. cryptodev-linux, devcrypto, pkcs11   │
+  ├────────────────────┴────────────────────────────────────────────┤
+  │  Kernel crypto API  (/dev/crypto via cryptodev-linux module)    │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Hardware: AES-NI / DMA crypto engine / SE050 / TPM             │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Buildroot kernel config for cryptodev:
+  CONFIG_CRYPTO_USER_API_HASH=y
+  CONFIG_CRYPTO_USER_API_SKCIPHER=y
+  CONFIG_CRYPTO_DEV_ALLWINNER_SUN8I_CE=y  (example: Allwinner SoC)
+```
+
+### OpenSSL Hardware Engine via cryptodev-linux (C)
+
+```c
+/* hw_engine_demo.c
+ * Use AES-256-CBC via cryptodev hardware engine
+ * Requires: kernel cryptodev module + openssl-engines
+ * Build: gcc hw_engine_demo.c -o hw_engine -lssl -lcrypto -ldl
  */
-#include <cstdio>
+
+#include <stdio.h>
+#include <string.h>
+#include <openssl/engine.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <openssl/err.h>
+
+#define CRYPTODEV_ENGINE "cryptodev"
+
+static void print_hex(const char *label, const unsigned char *data, size_t len)
+{
+    printf("%s: ", label);
+    for (size_t i = 0; i < len; i++) printf("%02x", data[i]);
+    printf("\n");
+}
+
+int main(void)
+{
+    ENGINE *eng = NULL;
+    EVP_CIPHER_CTX *ctx = NULL;
+    int ret = 1;
+
+    /* ── Load dynamic engine ─────────────────────────────────────── */
+    ENGINE_load_dynamic();
+    eng = ENGINE_by_id(CRYPTODEV_ENGINE);
+    if (!eng) {
+        fprintf(stderr, "Engine '%s' not available — falling back to software\n",
+                CRYPTODEV_ENGINE);
+        /* Graceful fallback: continue without hardware acceleration */
+        eng = NULL;
+    } else {
+        if (!ENGINE_init(eng)) {
+            ERR_print_errors_fp(stderr);
+            goto cleanup;
+        }
+        ENGINE_set_default(eng, ENGINE_METHOD_ALL);
+        printf("Hardware engine loaded: %s (%s)\n",
+               ENGINE_get_id(eng), ENGINE_get_name(eng));
+    }
+
+    /* ── Generate random key and IV ─────────────────────────────── */
+    unsigned char key[32], iv[16];
+    RAND_bytes(key, sizeof(key));
+    RAND_bytes(iv,  sizeof(iv));
+    print_hex("Key", key, sizeof(key));
+    print_hex("IV ", iv,  sizeof(iv));
+
+    /* ── Encrypt ─────────────────────────────────────────────────── */
+    const unsigned char plaintext[] = "Hello hardware crypto engine!   ";
+    unsigned char ciphertext[64];
+    int len, ciphertext_len;
+
+    ctx = EVP_CIPHER_CTX_new();
+    EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), eng, key, iv);
+    EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, sizeof(plaintext));
+    ciphertext_len = len;
+    EVP_EncryptFinal_ex(ctx, ciphertext + len, &len);
+    ciphertext_len += len;
+    print_hex("Ciphertext", ciphertext, ciphertext_len);
+
+    /* ── Decrypt ─────────────────────────────────────────────────── */
+    unsigned char decrypted[64] = {0};
+    int decrypted_len;
+    EVP_CIPHER_CTX_reset(ctx);
+    EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), eng, key, iv);
+    EVP_DecryptUpdate(ctx, decrypted, &len, ciphertext, ciphertext_len);
+    decrypted_len = len;
+    EVP_DecryptFinal_ex(ctx, decrypted + len, &len);
+    decrypted_len += len;
+
+    printf("Decrypted: %.*s\n", decrypted_len, decrypted);
+    ret = 0;
+
+cleanup:
+    EVP_CIPHER_CTX_free(ctx);
+    if (eng) { ENGINE_finish(eng); ENGINE_free(eng); }
+    return ret;
+}
+```
+
+### mbedTLS Hardware Acceleration (C) — Custom HAL
+
+```c
+/* mbedtls_hw_alt.c
+ * mbedTLS hardware alternate implementation via ALT hooks
+ * Define MBEDTLS_AES_ALT in mbedtls/config.h to activate
+ */
+
+#include "mbedtls/aes.h"
+#include <string.h>
+
+/* Simulated hardware registers (replace with real SoC MMIO) */
+#define HW_CRYPTO_BASE  0x40020000UL   /* example SoC address */
+
+typedef struct {
+    volatile uint32_t CTRL;
+    volatile uint32_t STATUS;
+    volatile uint32_t KEY[8];   /* 256-bit key */
+    volatile uint32_t DATA_IN[4];
+    volatile uint32_t DATA_OUT[4];
+} HwCryptoRegs;
+
+static HwCryptoRegs *hw = (HwCryptoRegs *)HW_CRYPTO_BASE;
+
+/* mbedTLS alternate context — matches mbedtls_aes_context layout */
+typedef struct mbedtls_aes_context {
+    int      nr;           /* number of rounds */
+    uint32_t key[68];      /* opaque storage   */
+} mbedtls_aes_context;
+
+void mbedtls_aes_init(mbedtls_aes_context *ctx)
+{
+    memset(ctx, 0, sizeof(*ctx));
+}
+
+void mbedtls_aes_free(mbedtls_aes_context *ctx)
+{
+    /* Zeroize key material before freeing */
+    memset(ctx, 0, sizeof(*ctx));
+}
+
+int mbedtls_aes_setkey_enc(mbedtls_aes_context *ctx,
+                            const unsigned char *key, unsigned int keybits)
+{
+    if (keybits != 128 && keybits != 192 && keybits != 256)
+        return MBEDTLS_ERR_AES_INVALID_KEY_LENGTH;
+
+    ctx->nr = (keybits / 32) + 6;
+
+    /* Load key into hardware registers */
+    const uint32_t *kw = (const uint32_t *)key;
+    for (int i = 0; i < (int)(keybits / 32); i++)
+        hw->KEY[i] = kw[i];
+
+    /* Also save for software fallback */
+    memcpy(ctx->key, key, keybits / 8);
+    return 0;
+}
+
+int mbedtls_aes_crypt_ecb(mbedtls_aes_context *ctx, int mode,
+                           const unsigned char input[16],
+                           unsigned char output[16])
+{
+    const uint32_t *in  = (const uint32_t *)input;
+    uint32_t       *out = (uint32_t *)output;
+
+    /* Load input data */
+    hw->DATA_IN[0] = in[0];
+    hw->DATA_IN[1] = in[1];
+    hw->DATA_IN[2] = in[2];
+    hw->DATA_IN[3] = in[3];
+
+    /* Trigger: ENCRYPT=1, DECRYPT=0 */
+    hw->CTRL = (mode == MBEDTLS_AES_ENCRYPT) ? 0x01 : 0x03;
+
+    /* Poll completion (real code: use interrupt/DMA) */
+    while (hw->STATUS & 0x01)
+        __asm__ volatile("nop");
+
+    out[0] = hw->DATA_OUT[0];
+    out[1] = hw->DATA_OUT[1];
+    out[2] = hw->DATA_OUT[2];
+    out[3] = hw->DATA_OUT[3];
+
+    return 0;
+}
+```
+
+---
+
+## PKCS#11 — C++ and Rust
+
+PKCS#11 is the standard API for hardware security modules (HSMs), smart cards, TPMs, and SE (Secure Element) devices. It decouples the application from the specific hardware.
+
+### PKCS#11 Architecture
+
+```
+  PKCS#11 ecosystem:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Application: key generation, signing, encryption               │
+  │  (C++/Rust — never touches raw key bytes!)                      │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  PKCS#11 API  (CK_FUNCTION_LIST, C_SignInit, C_Sign, ...)       │
+  ├──────────────┬──────────────────┬───────────────────────────────┤
+  │  SoftHSM2    │  TPM2-PKCS11     │  NXP SE050 PKCS11 lib         │
+  │  (software,  │  (tpm2-pkcs11,   │  (Secure Element,             │
+  │   testing)   │   hardware TPM)  │   hardware key storage)       │
+  ├──────────────┴──────────────────┴───────────────────────────────┤
+  │          p11-kit  (module discovery, trust anchor mgmt)         │
+  └─────────────────────────────────────────────────────────────────┘
+
+  p11-kit configuration on Buildroot target:
+  /etc/pkcs11/modules/softhsm2.module
+  /etc/pkcs11/modules/tpm2.module
+
+  Module file example (softhsm2.module):
+  module: /usr/lib/softhsm/libsofthsm2.so
+  managed: yes
+```
+
+### PKCS#11 in C++ — Key Generation and Signing
+
+```cpp
+// pkcs11_demo.cpp
+// RAII wrapper around PKCS#11 for embedded use
+// Build: g++ -std=c++17 pkcs11_demo.cpp -o pkcs11_demo -ldl
+
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <memory>
+#include <dlfcn.h>
+
+#define CRYPTOKI_GNU
+#include <pkcs11.h>    // from p11-kit or system PKCS#11 headers
+
+// ── Library path — override via environment or compile-time flag ───
+#ifndef PKCS11_MODULE
+#define PKCS11_MODULE "/usr/lib/softhsm/libsofthsm2.so"
+#endif
+
+// ── RAII PKCS#11 session ──────────────────────────────────────────
+class Pkcs11Session {
+public:
+    explicit Pkcs11Session(CK_SLOT_ID slot, const std::string &pin)
+    {
+        // Dynamically load PKCS#11 library
+        lib_ = dlopen(PKCS11_MODULE, RTLD_NOW | RTLD_LOCAL);
+        if (!lib_) throw std::runtime_error(dlerror());
+
+        auto getList = reinterpret_cast<CK_C_GetFunctionList>(
+                           dlsym(lib_, "C_GetFunctionList"));
+        if (!getList) throw std::runtime_error("C_GetFunctionList missing");
+
+        CK_RV rv = getList(&fn_);
+        check(rv, "C_GetFunctionList");
+
+        rv = fn_->C_Initialize(nullptr);
+        check(rv, "C_Initialize");
+
+        rv = fn_->C_OpenSession(slot,
+                                CKF_SERIAL_SESSION | CKF_RW_SESSION,
+                                nullptr, nullptr, &session_);
+        check(rv, "C_OpenSession");
+
+        rv = fn_->C_Login(session_, CKU_USER,
+                          reinterpret_cast<CK_UTF8CHAR_PTR>(
+                              const_cast<char *>(pin.c_str())),
+                          static_cast<CK_ULONG>(pin.size()));
+        check(rv, "C_Login");
+    }
+
+    ~Pkcs11Session()
+    {
+        if (fn_) {
+            fn_->C_Logout(session_);
+            fn_->C_CloseSession(session_);
+            fn_->C_Finalize(nullptr);
+        }
+        if (lib_) dlclose(lib_);
+    }
+
+    // ── Generate EC key pair on token ─────────────────────────────
+    std::pair<CK_OBJECT_HANDLE, CK_OBJECT_HANDLE> generate_ec_keypair(
+            const std::string &label)
+    {
+        // OID for prime256v1 (secp256r1)
+        static const CK_BYTE ec_params[] = {
+            0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07
+        };
+
+        CK_BBOOL yes = CK_TRUE, no = CK_FALSE;
+        CK_OBJECT_CLASS pub_class  = CKO_PUBLIC_KEY;
+        CK_OBJECT_CLASS priv_class = CKO_PRIVATE_KEY;
+        CK_KEY_TYPE key_type       = CKK_EC;
+
+        CK_ATTRIBUTE pub_tmpl[] = {
+            { CKA_CLASS,          &pub_class,  sizeof(pub_class)  },
+            { CKA_KEY_TYPE,       &key_type,   sizeof(key_type)   },
+            { CKA_TOKEN,          &yes,        sizeof(yes)        },
+            { CKA_VERIFY,         &yes,        sizeof(yes)        },
+            { CKA_EC_PARAMS,      (void*)ec_params, sizeof(ec_params) },
+            { CKA_LABEL,          (void*)label.c_str(), label.size()  },
+        };
+        CK_ATTRIBUTE priv_tmpl[] = {
+            { CKA_CLASS,          &priv_class, sizeof(priv_class) },
+            { CKA_KEY_TYPE,       &key_type,   sizeof(key_type)   },
+            { CKA_TOKEN,          &yes,        sizeof(yes)        },
+            { CKA_SENSITIVE,      &yes,        sizeof(yes)        },
+            { CKA_EXTRACTABLE,    &no,         sizeof(no)         },
+            { CKA_SIGN,           &yes,        sizeof(yes)        },
+            { CKA_LABEL,          (void*)label.c_str(), label.size()  },
+        };
+
+        CK_MECHANISM mech = { CKM_EC_KEY_PAIR_GEN, nullptr, 0 };
+        CK_OBJECT_HANDLE hPub, hPriv;
+
+        CK_RV rv = fn_->C_GenerateKeyPair(
+                session_, &mech,
+                pub_tmpl,  sizeof(pub_tmpl)  / sizeof(pub_tmpl[0]),
+                priv_tmpl, sizeof(priv_tmpl) / sizeof(priv_tmpl[0]),
+                &hPub, &hPriv);
+        check(rv, "C_GenerateKeyPair");
+
+        std::cout << "EC key pair generated. Pub=" << hPub
+                  << "  Priv=" << hPriv << "\n";
+        return {hPub, hPriv};
+    }
+
+    // ── Sign data with ECDSA ──────────────────────────────────────
+    std::vector<uint8_t> sign_ecdsa(CK_OBJECT_HANDLE hPriv,
+                                    const std::vector<uint8_t> &data)
+    {
+        CK_MECHANISM mech = { CKM_ECDSA_SHA256, nullptr, 0 };
+        CK_RV rv = fn_->C_SignInit(session_, &mech, hPriv);
+        check(rv, "C_SignInit");
+
+        CK_ULONG sig_len = 0;
+        // First call: get signature length
+        rv = fn_->C_Sign(session_,
+                         const_cast<CK_BYTE_PTR>(data.data()),
+                         data.size(), nullptr, &sig_len);
+        check(rv, "C_Sign (length query)");
+
+        std::vector<uint8_t> sig(sig_len);
+        rv = fn_->C_Sign(session_,
+                         const_cast<CK_BYTE_PTR>(data.data()),
+                         data.size(), sig.data(), &sig_len);
+        check(rv, "C_Sign");
+        sig.resize(sig_len);
+        return sig;
+    }
+
+    CK_SESSION_HANDLE handle() const { return session_; }
+
+private:
+    void check(CK_RV rv, const char *op)
+    {
+        if (rv != CKR_OK) {
+            throw std::runtime_error(std::string(op) +
+                                     " failed: RV=0x" +
+                                     std::to_string(rv));
+        }
+    }
+
+    void                *lib_     = nullptr;
+    CK_FUNCTION_LIST    *fn_      = nullptr;
+    CK_SESSION_HANDLE    session_ = CK_INVALID_HANDLE;
+};
+
+int main()
+{
+    try {
+        // Slot 0, user PIN — adjust for your HSM
+        Pkcs11Session sess(0, "1234");
+
+        auto [hPub, hPriv] = sess.generate_ec_keypair("device-signing-key");
+
+        std::vector<uint8_t> payload = { 0xDE, 0xAD, 0xBE, 0xEF,
+                                         0x01, 0x02, 0x03, 0x04 };
+        auto signature = sess.sign_ecdsa(hPriv, payload);
+
+        std::cout << "ECDSA-SHA256 signature (" << signature.size()
+                  << " bytes): ";
+        for (auto b : signature) printf("%02x", b);
+        printf("\n");
+    }
+    catch (const std::exception &ex) {
+        std::cerr << "Error: " << ex.what() << "\n";
+        return 1;
+    }
+    return 0;
+}
+```
+
+---
+
+## Rust TLS with rustls and tokio-rustls
+
+Rust's TLS ecosystem centers around `rustls` — a modern, memory-safe TLS library written entirely in Rust, with no C dependencies. For Buildroot Rust cross-compilation, use `BR2_PACKAGE_HOST_RUSTC=y` and a cross-toolchain cargo config.
+
+### Cargo.toml
+
+```toml
+[package]
+name    = "embedded-tls-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rustls          = { version = "0.23", features = ["ring"] }
+rustls-pemfile  = "2"
+tokio           = { version = "1",  features = ["full"] }
+tokio-rustls    = "0.26"
+webpki-roots    = "0.26"   # Mozilla root CAs
+anyhow          = "1"
+```
+
+### Async TLS Client in Rust
+
+```rust
+// src/main.rs — Async TLS 1.3 client with tokio + rustls
+
+use std::sync::Arc;
+use std::io::BufReader;
+use std::fs::File;
+
+use anyhow::{Context, Result};
+use rustls::{ClientConfig, RootCertStore};
+use rustls_pemfile::certs;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio_rustls::TlsConnector;
+
+const HOST: &str = "api.example.com";
+const PORT: u16  = 443;
+
+/// Load a PEM file as a certificate list
+fn load_certs(path: &str) -> Result<Vec<rustls::pki_types::CertificateDer<'static>>> {
+    let f = File::open(path).with_context(|| format!("open {path}"))?;
+    let mut rd = BufReader::new(f);
+    Ok(certs(&mut rd).collect::<Result<_, _>>()
+        .context("parse PEM certs")?)
+}
+
+/// Build a rustls client config with a custom CA bundle
+fn make_tls_config(ca_path: Option<&str>) -> Result<ClientConfig> {
+    let mut root_store = RootCertStore::empty();
+
+    if let Some(path) = ca_path {
+        // Custom CA (embedded device with private PKI)
+        for cert in load_certs(path)? {
+            root_store.add(cert).context("add CA cert")?;
+        }
+    } else {
+        // Use Mozilla WebPKI roots (internet-facing)
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    }
+
+    let config = ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();   // No mTLS here
+
+    Ok(config)
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Use custom CA for internal PKI, or None for public roots
+    let tls_config = make_tls_config(Some("/etc/ssl/certs/my-root-ca.crt"))?;
+    let connector  = TlsConnector::from(Arc::new(tls_config));
+
+    // TCP connect
+    let addr = format!("{HOST}:{PORT}");
+    let stream = TcpStream::connect(&addr)
+        .await
+        .with_context(|| format!("TCP connect to {addr}"))?;
+
+    // TLS handshake
+    let server_name = HOST.try_into().expect("invalid hostname");
+    let mut tls_stream = connector.connect(server_name, stream)
+        .await
+        .context("TLS handshake")?;
+
+    println!("Connected to {HOST}:{PORT}");
+
+    // Send HTTP GET
+    let request = format!(
+        "GET /api/status HTTP/1.1\r\nHost: {HOST}\r\nConnection: close\r\n\r\n"
+    );
+    tls_stream.write_all(request.as_bytes()).await.context("write")?;
+
+    // Read response
+    let mut response = Vec::new();
+    tls_stream.read_to_end(&mut response).await.context("read")?;
+    println!("{}", String::from_utf8_lossy(&response));
+
+    Ok(())
+}
+```
+
+### PKCS#11 in Rust — cryptoki crate
+
+```rust
+// pkcs11_rust.rs — PKCS#11 key operations in Rust
+// Cargo.toml: cryptoki = "0.6"
+
+use cryptoki::{
+    context::{CInitializeArgs, Pkcs11},
+    mechanism::Mechanism,
+    object::{Attribute, AttributeType, KeyType, ObjectClass},
+    session::UserType,
+    types::AuthPin,
+};
+use std::path::PathBuf;
+
+const PKCS11_LIB: &str = "/usr/lib/softhsm/libsofthsm2.so";
+const USER_PIN:   &str = "1234";
+
+fn main() -> anyhow::Result<()> {
+    // ── Initialize PKCS#11 library ────────────────────────────────
+    let pkcs11 = Pkcs11::new(PathBuf::from(PKCS11_LIB))
+        .context("load PKCS#11 module")?;
+    pkcs11.initialize(CInitializeArgs::OsThreads)?;
+
+    // ── Get first available slot ──────────────────────────────────
+    let slots = pkcs11.get_slots_with_token()?;
+    let slot = *slots.first().expect("no PKCS#11 slots found");
+
+    // ── Open session ──────────────────────────────────────────────
+    let session = pkcs11.open_rw_session(slot)?;
+    session.login(UserType::User, Some(&AuthPin::new(USER_PIN.into())))?;
+    println!("PKCS#11 session opened on slot {slot:?}");
+
+    // ── Search for existing key by label ─────────────────────────
+    let label = "rust-device-key";
+    let search = vec![
+        Attribute::Class(ObjectClass::PRIVATE_KEY),
+        Attribute::Label(label.as_bytes().to_vec()),
+    ];
+    let found = session.find_objects(&search)?;
+
+    let priv_key = if let Some(&handle) = found.first() {
+        println!("Found existing key: {handle:?}");
+        handle
+    } else {
+        // ── Generate new RSA-2048 key pair ────────────────────────
+        println!("Generating new RSA-2048 key pair...");
+
+        let pub_attrs = vec![
+            Attribute::Token(true),
+            Attribute::Verify(true),
+            Attribute::ModulusBits(2048.into()),
+            Attribute::PublicExponent(vec![0x01, 0x00, 0x01]),
+            Attribute::Label(label.as_bytes().to_vec()),
+        ];
+        let priv_attrs = vec![
+            Attribute::Token(true),
+            Attribute::Sensitive(true),
+            Attribute::Extractable(false),
+            Attribute::Sign(true),
+            Attribute::Label(label.as_bytes().to_vec()),
+        ];
+
+        let (_, priv_handle) = session.generate_key_pair(
+            &Mechanism::RsaPkcsKeyPairGen,
+            &pub_attrs,
+            &priv_attrs,
+        )?;
+        println!("Key pair generated: priv={priv_handle:?}");
+        priv_handle
+    };
+
+    // ── Sign a message ────────────────────────────────────────────
+    let message = b"Embedded Rust PKCS11 signing demo";
+    let signature = session.sign(
+        &Mechanism::RsaPkcsSha256,
+        priv_key,
+        message,
+    )?;
+
+    print!("RSA-PKCS#1-SHA256 signature ({} bytes): ", signature.len());
+    for b in &signature[..8] { print!("{b:02x}"); }
+    println!("...");
+
+    // ── Logout and cleanup (handled by Drop) ──────────────────────
+    session.logout()?;
+    pkcs11.finalize()?;
+    Ok(())
+}
+```
+
+---
+
+## Mutual TLS (mTLS)
+
+mTLS requires both the server and the client to present valid certificates. This is the standard for device-to-cloud authentication in industrial IoT.
+
+### mTLS Flow Diagram
+
+```
+  mTLS handshake sequence:
+
+  Device (Client)                      Server (Backend)
+       │                                     │
+       │──── 1. ClientHello ────────────────►│
+       │                                     │
+       │◄─── 2. ServerHello ─────────────────│
+       │◄─── 3. Server Certificate ──────────│
+       │◄─── 4. CertificateRequest ──────────│  ← asks for client cert
+       │◄─── 5. ServerHelloDone ─────────────│
+       │                                     │
+       │  [Verify server cert against CA]    │
+       │                                     │
+       │──── 6. Client Certificate ─────────►│  ← device cert
+       │──── 7. ClientKeyExchange ──────────►│
+       │──── 8. CertificateVerify ──────────►│  ← signed by device key
+       │──── 9. ChangeCipherSpec ───────────►│
+       │──── 10. Finished ──────────────────►│
+       │                                     │
+       │  [Verify client cert against CA]    │
+       │                                     │
+       │◄─── 11. ChangeCipherSpec ───────────│
+       │◄─── 12. Finished ───────────────────│
+       │                                     │
+       │════════ Encrypted channel ══════════│
+       │      (device authenticated!)        │
+```
+
+### mTLS Server in C++ with OpenSSL
+
+```cpp
+// mtls_server.cpp
+// Simple mTLS echo server requiring client certificate
+// Build: g++ -std=c++17 mtls_server.cpp -o mtls_server -lssl -lcrypto
+
+#include <iostream>
+#include <stdexcept>
 #include <cstring>
-#include <cstdlib>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/x509v3.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 
-namespace {
+#define SERVER_CERT  "/etc/ssl/certs/server-cert.pem"
+#define SERVER_KEY   "/etc/ssl/private/server-key.pem"
+#define CA_CERT      "/etc/ssl/certs/my-root-ca.crt"
+#define PORT         8443
 
-constexpr int    PORT      = 9000;
-constexpr size_t BUFSIZE   = 256;
-constexpr int    BACKLOG   = 5;
+static SSL_CTX *create_server_ctx()
+{
+    SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) throw std::runtime_error("SSL_CTX_new failed");
 
-/*
- * ┌──────────────────────────────────────────────┐
- * │  Virtual address space of hardened_service   │
- * │  on two successive runs (PIE + ASLR)         │
- * │                                              │
- * │  Run 1                  Run 2                │
- * │  0x558a32001234 [text]  0x7f3a10001234 [text]│
- * │  0x558a32003000 [data]  0x7f3a10003000 [data]│
- * │  0x558a32004000 [heap]  0x7f3a10004000 [heap]│
- * │                                              │
- * │  Attacker cannot hardcode ROP gadget addrs   │
- * └──────────────────────────────────────────────┘
- */
+    // Server certificate and key
+    if (SSL_CTX_use_certificate_file(ctx, SERVER_CERT, SSL_FILETYPE_PEM) != 1 ||
+        SSL_CTX_use_PrivateKey_file(ctx, SERVER_KEY,  SSL_FILETYPE_PEM) != 1 ||
+        SSL_CTX_check_private_key(ctx) != 1)
+        throw std::runtime_error("Server cert/key error");
 
-class Session {
-public:
-    explicit Session(int fd) : fd_(fd) {}
-    ~Session() { if (fd_ >= 0) close(fd_); }
+    // Require client certificate signed by our CA
+    if (!SSL_CTX_load_verify_locations(ctx, CA_CERT, nullptr))
+        throw std::runtime_error("Cannot load CA cert");
 
-    Session(const Session&)            = delete;
-    Session& operator=(const Session&) = delete;
+    SSL_CTX_set_verify(ctx,
+        SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+        nullptr);
 
-    void run() {
-        char buf[BUFSIZE];
-        /* snprintf is FORTIFY-wrapped; overflow detected at runtime */
-        ssize_t n = recv(fd_, buf, sizeof(buf) - 1, 0);
-        if (n <= 0) return;
-        buf[n] = '\0';
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+    return ctx;
+}
 
-        char reply[BUFSIZE + 32];
-        int r = snprintf(reply, sizeof(reply),
-                         "ECHO: %s\r\n", buf);
-        if (r > 0 && static_cast<size_t>(r) < sizeof(reply))
-            send(fd_, reply, static_cast<size_t>(r), 0);
+static void handle_client(SSL_CTX *ctx, int client_fd)
+{
+    SSL *ssl = SSL_new(ctx);
+    SSL_set_fd(ssl, client_fd);
+
+    if (SSL_accept(ssl) != 1) {
+        ERR_print_errors_fp(stderr);
+        SSL_free(ssl);
+        return;
     }
 
-private:
-    int fd_;
-};
+    // Extract and print client CN
+    X509 *peer = SSL_get_peer_certificate(ssl);
+    if (peer) {
+        char cn[256];
+        X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
+                                   NID_commonName, cn, sizeof(cn));
+        std::cout << "Client authenticated: CN=" << cn << "\n";
+        X509_free(peer);
+    }
 
-} // anonymous namespace
+    char buf[1024];
+    int  n = SSL_read(ssl, buf, sizeof(buf) - 1);
+    if (n > 0) {
+        buf[n] = '\0';
+        std::cout << "Received: " << buf << "\n";
+        SSL_write(ssl, buf, n);  // echo back
+    }
+
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+}
 
 int main()
 {
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) { perror("socket"); return 1; }
+    SSL_CTX *ctx = create_server_ctx();
 
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,
-               &opt, sizeof(opt));
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_port        = htons(PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(server_fd, reinterpret_cast<sockaddr*>(&addr),
-             sizeof(addr)) < 0) {
-        perror("bind"); return 1;
-    }
-    listen(server_fd, BACKLOG);
-    printf("Listening on 127.0.0.1:%d (PIE hardened)\n", PORT);
+    bind(server_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+    listen(server_fd, 5);
 
-    for (;;) {
+    std::cout << "mTLS server listening on port " << PORT << "\n";
+
+    while (true) {
         int client_fd = accept(server_fd, nullptr, nullptr);
-        if (client_fd < 0) continue;
-        Session s(client_fd);
-        s.run();
-    }
-}
-```
-
-### Example 5: Checking ELF Security Properties Programmatically (C++)
-
-```cpp
-/*
- * elf_checker.cpp
- *
- * Parses an ELF binary and reports its security properties.
- * Useful in a Buildroot post-build test or CI pipeline.
- *
- * Compile:
- *   g++ -std=c++17 -fPIE -pie -O2 -o elf_checker elf_checker.cpp
- *
- * Usage:
- *   ./elf_checker output/target/usr/bin/myapp
- */
-#include <cstdio>
-#include <cstring>
-#include <fstream>
-#include <string>
-#include <vector>
-#include <elf.h>
-
-struct SecurityInfo {
-    bool is_pie        = false;
-    bool has_relro     = false;
-    bool has_bind_now  = false;
-    bool has_stack_canary = false;
-    bool has_gnu_stack = false;
-    bool stack_exec    = false;
-    bool fortify       = false;
-};
-
-/*
- * ASCII report layout:
- *
- *  ┌──────────────────────────────────────────┐
- *  │  ELF Security Report: /usr/bin/myapp     │
- *  ├──────────────┬───────────────────────────┤
- *  │  PIE         │  YES  (ET_DYN)            │
- *  │  RELRO       │  FULL (GNU_RELRO + BIND)  │
- *  │  Stack guard │  YES  (__stack_chk_fail)  │
- *  │  NX stack    │  YES  (RW- not RWE)       │
- *  │  FORTIFY     │  YES  (__memcpy_chk found)│
- *  └──────────────┴───────────────────────────┘
- */
-static void print_report(const std::string& path,
-                         const SecurityInfo& si)
-{
-    printf("\n");
-    printf("  +------------------------------------------+\n");
-    printf("  |  ELF Security Report                     |\n");
-    printf("  |  %-40s|\n", path.c_str());
-    printf("  +------------------+-----------------------+\n");
-    printf("  | PIE              | %-22s|\n",
-           si.is_pie ? "YES (ET_DYN)" : "NO  (ET_EXEC)");
-    printf("  | RELRO            | %-22s|\n",
-           si.has_relro && si.has_bind_now ? "FULL" :
-           si.has_relro                   ? "PARTIAL" : "NONE");
-    printf("  | Stack canary     | %-22s|\n",
-           si.has_stack_canary ? "YES" : "NO");
-    printf("  | NX stack         | %-22s|\n",
-           si.has_gnu_stack
-               ? (si.stack_exec ? "NO (RWX!)" : "YES")
-               : "UNKNOWN");
-    printf("  | FORTIFY_SOURCE   | %-22s|\n",
-           si.fortify ? "YES" : "NO");
-    printf("  +------------------+-----------------------+\n\n");
-}
-
-int main(int argc, char *argv[])
-{
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <elf-file>\n", argv[0]);
-        return 1;
-    }
-
-    FILE *f = fopen(argv[1], "rb");
-    if (!f) { perror("fopen"); return 1; }
-
-    Elf64_Ehdr ehdr;
-    if (fread(&ehdr, sizeof(ehdr), 1, f) != 1) {
-        fclose(f); return 1;
-    }
-
-    SecurityInfo si;
-
-    /* PIE: dynamic executables have type ET_DYN */
-    si.is_pie = (ehdr.e_type == ET_DYN);
-
-    /* Walk program headers for GNU_RELRO and GNU_STACK */
-    std::vector<Elf64_Phdr> phdrs(ehdr.e_phnum);
-    fseek(f, static_cast<long>(ehdr.e_phoff), SEEK_SET);
-    fread(phdrs.data(), sizeof(Elf64_Phdr),
-          ehdr.e_phnum, f);
-
-    for (const auto& ph : phdrs) {
-        if (ph.p_type == PT_GNU_RELRO) si.has_relro    = true;
-        if (ph.p_type == PT_GNU_STACK) {
-            si.has_gnu_stack = true;
-            si.stack_exec    = (ph.p_flags & PF_X) != 0;
+        if (client_fd >= 0) {
+            handle_client(ctx, client_fd);
+            close(client_fd);
         }
     }
 
-    /* Walk dynamic section for BIND_NOW and needed symbols */
-    /* (simplified: real implementation would parse .dynsym) */
-    /* For demonstration we grep the raw binary for symbol names */
-    fclose(f);
-
-    /* Re-open and scan for well-known hardening symbols */
-    std::ifstream bin(argv[1], std::ios::binary);
-    std::string content((std::istreambuf_iterator<char>(bin)),
-                         std::istreambuf_iterator<char>());
-
-    si.has_stack_canary =
-        content.find("__stack_chk_fail") != std::string::npos;
-    si.fortify =
-        content.find("__memcpy_chk")   != std::string::npos ||
-        content.find("__sprintf_chk")  != std::string::npos ||
-        content.find("__strcpy_chk")   != std::string::npos;
-
-    print_report(argv[1], si);
-
-    /* Exit non-zero if any critical protection is missing */
-    bool ok = si.is_pie && si.has_relro && si.has_stack_canary;
-    return ok ? 0 : 1;
+    SSL_CTX_free(ctx);
+    close(server_fd);
+    return 0;
 }
 ```
 
 ---
 
-## Memory Safety with Rust
+## Performance Benchmarking
 
-Rust's ownership model eliminates entire classes of memory-safety vulnerabilities at compile time, making it an excellent choice for new security-sensitive code in a Buildroot image. Buildroot has first-class Rust support via `BR2_PACKAGE_HOST_RUSTC`.
+Comparing software vs. hardware-accelerated crypto on typical embedded SoCs:
 
-### Buildroot Rust Prerequisites
-
-```ini
-# In your defconfig
-BR2_PACKAGE_HOST_RUSTC=y
-# Cross-compilation target triple is set automatically
-# from BR2_ARCH / BR2_ENDIAN
 ```
+  Benchmark results — AES-256-CBC, 1 MB payload
+  (Illustrative values; actual results vary by SoC)
 
-### Example 6: Hardened Configuration Parser in Rust
+  ┌────────────────────────────┬──────────────────┬──────────────────┐
+  │ Platform                   │ Software (MB/s)  │ Hardware (MB/s)  │
+  ├────────────────────────────┼──────────────────┼──────────────────┤
+  │ Cortex-A7 @ 800 MHz        │      42          │      350         │
+  │ Cortex-A53 @ 1.2 GHz       │      95          │      800         │
+  │ Cortex-A55 @ 1.8 GHz       │     190          │     1200+        │
+  │ Cortex-A72 @ 1.5 GHz       │     280          │     2000+        │
+  └────────────────────────────┴──────────────────┴──────────────────┘
 
-```rust
-// config_parser/src/main.rs
-//
-// A safe configuration file parser for an embedded target.
-// No unsafe blocks, no buffer overflows, no use-after-free.
-//
-// Buildroot package: package/config_parser/
-//   config_parser.mk must set:
-//     CONFIG_PARSER_VERSION  = 1.0.0
-//     CONFIG_PARSER_SITE     = $(TOPDIR)/package/config_parser/src
-//     CONFIG_PARSER_SITE_METHOD = local
-//     $(eval $(cargo-package))
+  RSA-2048 sign operations/second:
+  ┌────────────────────────────┬──────────────────┬──────────────────┐
+  │ Platform                   │ Software (ops/s) │ HW/PKCS11 (ops/s)│
+  ├────────────────────────────┼──────────────────┼──────────────────┤
+  │ Cortex-A7 @ 800 MHz        │       55         │      140         │
+  │ Cortex-A53 @ 1.2 GHz       │      120         │      400         │
+  └────────────────────────────┴──────────────────┴──────────────────┘
 
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-
-/// Parsed configuration entry.
-///
-/// All string data is owned; no raw pointers, no lifetime
-/// management — the compiler guarantees no dangling refs.
-#[derive(Debug, Clone)]
-pub struct Config {
-    entries: HashMap<String, String>,
-}
-
-/// Error type for configuration parsing.
-#[derive(Debug)]
-pub enum ConfigError {
-    Io(std::io::Error),
-    ParseError { line: usize, detail: String },
-    ValueTooLong { key: String, max: usize, got: usize },
-}
-
-impl std::fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConfigError::Io(e) =>
-                write!(f, "I/O error: {e}"),
-            ConfigError::ParseError { line, detail } =>
-                write!(f, "parse error at line {line}: {detail}"),
-            ConfigError::ValueTooLong { key, max, got } =>
-                write!(f, "value for '{key}' too long: {got} > {max}"),
-        }
-    }
-}
-
-impl From<std::io::Error> for ConfigError {
-    fn from(e: std::io::Error) -> Self {
-        ConfigError::Io(e)
-    }
-}
-
-const MAX_VALUE_LEN: usize = 255;
-const MAX_KEY_LEN:   usize = 63;
-
-impl Config {
-    /// Parse a key=value text file.
-    ///
-    /// Lines beginning with '#' are comments.
-    /// Whitespace around '=' is stripped.
-    pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
-        let content = fs::read_to_string(path)?;
-        let mut entries = HashMap::new();
-
-        for (lineno, line) in content.lines().enumerate() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            let (key, value) = line
-                .split_once('=')
-                .ok_or_else(|| ConfigError::ParseError {
-                    line: lineno + 1,
-                    detail: format!("missing '=' in '{line}'"),
-                })?;
-
-            let key   = key.trim();
-            let value = value.trim();
-
-            // Enforce limits — no silent truncation
-            if key.len() > MAX_KEY_LEN {
-                return Err(ConfigError::ValueTooLong {
-                    key: key.to_owned(),
-                    max: MAX_KEY_LEN,
-                    got: key.len(),
-                });
-            }
-            if value.len() > MAX_VALUE_LEN {
-                return Err(ConfigError::ValueTooLong {
-                    key: key.to_owned(),
-                    max: MAX_VALUE_LEN,
-                    got: value.len(),
-                });
-            }
-
-            entries.insert(key.to_owned(), value.to_owned());
-        }
-
-        Ok(Config { entries })
-    }
-
-    pub fn get(&self, key: &str) -> Option<&str> {
-        self.entries.get(key).map(String::as_str)
-    }
-}
-
-fn main() {
-    let path = Path::new("/etc/myapp.conf");
-
-    match Config::from_file(path) {
-        Ok(cfg) => {
-            println!("device  = {}",
-                cfg.get("device").unwrap_or("(not set)"));
-            println!("baud    = {}",
-                cfg.get("baud_rate").unwrap_or("115200"));
-        }
-        Err(e) => {
-            eprintln!("Error reading config: {e}");
-            std::process::exit(1);
-        }
-    }
-}
-```
-
-### Example 7: Rust Buildroot Package Makefile
-
-```makefile
-################################################################################
-#
-# config_parser
-#
-################################################################################
-
-CONFIG_PARSER_VERSION  = 1.0.0
-CONFIG_PARSER_SITE     = $(TOPDIR)/package/config_parser
-CONFIG_PARSER_SITE_METHOD = local
-
-# Cargo packages use the generic cargo-package infrastructure.
-# Buildroot automatically sets RUSTFLAGS for the target triple,
-# adds -C opt-level=2, and strips the binary via BR2_STRIP_strip.
-$(eval $(cargo-package))
-```
-
-### Example 8: Secure IPC Listener in Rust
-
-```rust
-// secure_ipc/src/main.rs
-//
-// A Unix domain socket server that validates all input.
-// Compiled with Rust's default deny-by-default safety model;
-// no -fstack-protector needed — the borrow checker prevents
-// the underlying memory errors at compile time.
-
-use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixListener;
-use std::path::Path;
-use std::fs;
-
-const SOCKET_PATH: &str = "/run/myapp/ipc.sock";
-const MAX_MSG_LEN: usize = 1024;
-
-/*
- * Ownership model prevents use-after-free and double-free:
- *
- *   ┌────────────────────────────────────────────┐
- *   │  let stream = listener.accept()?           │
- *   │        │                                   │
- *   │        │  stream OWNS the file descriptor  │
- *   │        │                                   │
- *   │  process_client(stream)                    │
- *   │        │  stream MOVED into function       │
- *   │        │  cannot be used after this point  │
- *   │        │                                   │
- *   │        ▼                                   │
- *   │  } ← stream dropped, fd closed             │
- *   │      automatically, no leak possible       │
- *   └────────────────────────────────────────────┘
- */
-
-fn process_client(
-    stream: std::os::unix::net::UnixStream,
-) -> std::io::Result<()> {
-    let mut writer = stream.try_clone()?;
-    let reader = BufReader::new(stream);
-
-    for line in reader.lines() {
-        let msg = line?;
-
-        // Enforce message length — no unbounded allocation
-        if msg.len() > MAX_MSG_LEN {
-            writer.write_all(b"ERR: message too long\n")?;
-            continue;
-        }
-
-        // Validate: only printable ASCII
-        if !msg.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
-            writer.write_all(b"ERR: invalid characters\n")?;
-            continue;
-        }
-
-        let response = format!("OK: {msg}\n");
-        writer.write_all(response.as_bytes())?;
-    }
-    Ok(())
-}
-
-fn main() -> std::io::Result<()> {
-    let sock_path = Path::new(SOCKET_PATH);
-
-    // Remove stale socket
-    if sock_path.exists() {
-        fs::remove_file(sock_path)?;
-    }
-
-    // Ensure parent directory exists
-    if let Some(parent) = sock_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let listener = UnixListener::bind(sock_path)?;
-
-    // Restrict socket to owner only (mode 0600)
-    fs::set_permissions(
-        sock_path,
-        std::os::unix::fs::PermissionsExt::from_mode(0o600),
-    )?;
-
-    eprintln!("IPC server listening on {SOCKET_PATH}");
-
-    for stream in listener.incoming() {
-        match stream {
-            Ok(s) => {
-                if let Err(e) = process_client(s) {
-                    eprintln!("client error: {e}");
-                }
-            }
-            Err(e) => eprintln!("accept error: {e}"),
-        }
-    }
-    Ok(())
-}
+  Run your own benchmarks:
+  openssl speed -evp aes-256-cbc
+  openssl speed -engine cryptodev -evp aes-256-cbc   # with HW engine
+  openssl speed rsa2048
+  mbedtls_benchmark (mbedTLS benchmark app)
 ```
 
 ---
 
-## Fortify Source Deep Dive
-
-`-D_FORTIFY_SOURCE=2` works by replacing certain libc functions with checked variants when the destination buffer size is known at compile time.
+## Security Hardening Checklist
 
 ```
-  FORTIFY_SOURCE mechanism
-  ════════════════════════
+  TLS/Crypto Security Hardening for Buildroot Embedded:
 
-  Source code:
-    char buf[64];
-    strcpy(buf, src);
+  Certificate Management
+  ├── [x] Use EC keys (prime256v1) instead of RSA where possible
+  ├── [x] Device key generated on-device (never exported)
+  ├── [x] Private keys at chmod 600, owned by service user
+  ├── [x] Certificate rotation mechanism in place
+  └── [x] Short-lived device certs (1-3 years max)
 
-  Without FORTIFY:
-    call  strcpy@plt          ← no bounds check
+  TLS Configuration
+  ├── [x] Minimum TLS 1.2 enforced (TLS 1.3 preferred)
+  ├── [x] Disable SSLv3, TLSv1.0, TLSv1.1 explicitly
+  ├── [x] Disable NULL, EXPORT, RC4, MD5 cipher suites
+  ├── [x] Enable perfect forward secrecy (ECDHE key exchange)
+  ├── [x] Certificate validation: verify peer, check hostname
+  ├── [x] OCSP stapling or CRL checking configured
+  └── [x] SNI configured for multi-tenant servers
 
-  With -D_FORTIFY_SOURCE=2 and known buffer size:
-    mov   rdi, buf
-    mov   rsi, 64             ← size injected by compiler
-    mov   rdx, src
-    call  __strcpy_chk@plt    ← runtime bounds check wrapper
-                              ← aborts if strlen(src) >= 64
+  Buildroot Integration
+  ├── [x] Remove openssl CLI from release builds (BR2_PACKAGE_OPENSSL_BIN=n)
+  ├── [x] Disable test/demo programs from mbedTLS and wolfSSL
+  ├── [x] Strip debug symbols from TLS library in production
+  ├── [x] Enable stack protector: -fstack-protector-strong
+  ├── [x] Enable ASLR: /proc/sys/kernel/randomize_va_space = 2
+  └── [x] Use read-only overlay for /etc/ssl
 
-  __strcpy_chk internals (glibc):
-  ┌─────────────────────────────────────────────────┐
-  │  if (__builtin_expect(strlen(src) >= buflen, 0))│
-  │      __chk_fail();   // → abort()               │
-  │  return strcpy(dest, src);                      │
-  └─────────────────────────────────────────────────┘
-```
-
-### Functions Covered by FORTIFY_SOURCE
-
-```
-  memcpy   mempcpy   memmove   memset   memchr
-  strcpy   strncpy   strcat    strncat  stpcpy
-  sprintf  snprintf  vsprintf  vsnprintf
-  gets     fgets     read      pread    recv
-  recvfrom poll      ppoll     realpath
-```
-
-### What FORTIFY_SOURCE Cannot Protect Against
-
-```
-  Limitations of FORTIFY_SOURCE=2
-  ─────────────────────────────────
-  ✗ Heap buffer overflows (heap allocator not instrumented)
-  ✗ Integer overflows before length-restricted call
-  ✗ Overflows into adjacent stack variables (not past them)
-  ✗ Off-by-one where size is passed as a runtime variable
-  ✗ Custom memory copy loops (not libc wrappers)
-
-  Complement with:
-  ✓ AddressSanitizer in development builds
-  ✓ Stack canaries (-fstack-protector-strong)
-  ✓ Heap hardening (hardened_malloc, glibc MALLOC_CHECK_)
-  ✓ Valgrind / Dr. Memory in CI
-```
-
----
-
-## RELRO and Full Hardening Pipeline
-
-### Understanding the GOT and PLT
-
-```
-  Dynamic linking WITHOUT RELRO
-  ══════════════════════════════
-
-  Binary calls printf():
-
-  .text                      .plt              .got.plt
-  ┌──────────────┐           ┌──────────┐      ┌───────────────┐
-  │  call printf │──────────►│ plt stub │─────►│ printf addr   │
-  └──────────────┘           └──────────┘      │  (writable!)  │
-                                               └───────────────┘
-                                                      ▲
-                                               Attacker overwrites
-                                               with shellcode addr
-
-
-  With FULL RELRO (-z relro -z now)
-  ══════════════════════════════════
-
-  At load time: dynamic linker resolves ALL symbols eagerly,
-  then mprotect()s the GOT pages to PROT_READ.
-
-  .text                      .plt              .got  (READ-ONLY)
-  ┌──────────────┐           ┌──────────┐      ┌───────────────┐
-  │  call printf │──────────►│ plt stub │─────►│ printf addr   │
-  └──────────────┘           └──────────┘      │  (read-only)  │
-                                               └───────────────┘
-                                               Overwrite → SIGSEGV
-```
-
-### Full Hardening Compilation Pipeline
-
-```bash
-#!/bin/sh
-# Hardened build script for a single binary
-# Mirrors what Buildroot injects via TARGET_CFLAGS / TARGET_LDFLAGS
-
-CC="${CROSS_COMPILE}gcc"
-CXX="${CROSS_COMPILE}g++"
-
-CFLAGS_HARDENED="\
-    -fstack-protector-strong \
-    -D_FORTIFY_SOURCE=2 \
-    -fPIE \
-    -O2 \
-    -Wall -Wformat -Wformat-security \
-    -Werror=format-security"
-
-LDFLAGS_HARDENED="\
-    -pie \
-    -Wl,-z,relro \
-    -Wl,-z,now \
-    -Wl,-z,noexecstack"
-
-${CC} ${CFLAGS_HARDENED} -c -o myapp.o myapp.c
-${CC} ${LDFLAGS_HARDENED} -o myapp myapp.o
-
-# Verify
-echo "=== Checking myapp ==="
-readelf -d myapp | grep -E "BIND_NOW|GNU_RELRO" && echo "[OK] RELRO"
-readelf -l myapp | grep GNU_STACK
-file myapp | grep -q "pie" && echo "[OK] PIE"
-```
-
-### Verifying with `checksec`
-
-```
-  checksec output for a fully hardened binary:
-
-  ┌─────────────────────────────────────────────────────────────┐
-  │  RELRO           STACK CANARY  NX    PIE    RPATH  RUNPATH  │
-  │  Full RELRO      Canary found  NX    PIE    No     No       │
-  └─────────────────────────────────────────────────────────────┘
-
-  checksec output for an unprotected binary:
-
-  ┌─────────────────────────────────────────────────────────────┐
-  │  RELRO           STACK CANARY  NX    PIE    RPATH  RUNPATH  │
-  │  No RELRO        No canary     NX    No PIE No     No       │
-  └─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Verification and Audit Tools
-
-### Post-build Hardening Audit Script
-
-```bash
-#!/bin/sh
-# board/myboard/check_hardening.sh
-# Run as: BR2_ROOTFS_POST_BUILD_SCRIPT=board/myboard/check_hardening.sh
-#
-# Produces a report like:
-#
-# ┌────────────────────────────────────────────────────┐
-# │  Hardening Audit Report                            │
-# │  Target: output/target                             │
-# ├────────────────────────┬───────────────────────────┤
-# │  Binary                │  PIE RELRO SSP  FORTIFY   │
-# ├────────────────────────┼───────────────────────────┤
-# │  /usr/bin/myapp        │  YES  FULL  YES  YES      │
-# │  /bin/busybox          │  YES  FULL  YES  YES      │
-# │  /usr/sbin/dropbear    │  YES  PART  YES  YES      │
-# │  /usr/lib/libmylib.so  │  --   FULL  YES  YES      │
-# └────────────────────────┴───────────────────────────┘
-
-TARGET="${1:-output/target}"
-PASS=0
-FAIL=0
-
-printf "\n%-40s %-5s %-6s %-5s %-7s\n" \
-    "Binary" "PIE" "RELRO" "SSP" "FORTIFY"
-printf "%s\n" "$(printf '─%.0s' $(seq 1 65))"
-
-find "${TARGET}" -type f -executable 2>/dev/null | while read -r f; do
-    # Only ELF files
-    file "$f" 2>/dev/null | grep -q ELF || continue
-
-    pie=$(readelf -h "$f" 2>/dev/null | grep -c "DYN (")
-    relro_partial=$(readelf -l "$f" 2>/dev/null | grep -c GNU_RELRO)
-    bind_now=$(readelf -d "$f" 2>/dev/null | grep -c BIND_NOW)
-    ssp=$(readelf -s "$f" 2>/dev/null | grep -c "__stack_chk_fail")
-    fortify=$(readelf -s "$f" 2>/dev/null | grep -c "_chk@")
-
-    pie_s=$([ "$pie"    -gt 0 ] && echo "YES" || echo "NO ")
-    if   [ "$relro_partial" -gt 0 ] && [ "$bind_now" -gt 0 ]; then
-        relro_s="FULL"
-    elif [ "$relro_partial" -gt 0 ]; then
-        relro_s="PART"
-    else
-        relro_s="NONE"
-    fi
-    ssp_s=$([ "$ssp"    -gt 0 ] && echo "YES" || echo "NO ")
-    fort_s=$([ "$fortify" -gt 0 ] && echo "YES" || echo "NO ")
-
-    rel="${f#${TARGET}}"
-    printf "%-40s %-5s %-6s %-5s %-7s\n" \
-        "${rel}" "${pie_s}" "${relro_s}" "${ssp_s}" "${fort_s}"
-done
+  Key Storage
+  ├── [x] Store private keys in TPM or Secure Element if available
+  ├── [x] Use PKCS#11 API to abstract key storage backend
+  ├── [x] Never log, print, or transmit key material
+  └── [x] Zeroize key material after use (memset_s / explicit_bzero)
 ```
 
 ---
 
 ## Summary
 
-Security hardening in Buildroot is a layered defence strategy that applies protections at the compiler, linker, and filesystem levels. The key mechanisms and their purposes are:
+This chapter covered the full TLS and cryptographic library landscape for Buildroot-based embedded Linux systems.
 
-```
-  ┌────────────────────────────────────────────────────────────┐
-  │               SECURITY HARDENING SUMMARY                   │
-  │                                                            │
-  │  Layer 1 — Compiler                                        │
-  │  ─────────────────                                         │
-  │  -fstack-protector-strong  Detects stack-buffer overflows  │
-  │  -D_FORTIFY_SOURCE=2       Bounds-checks libc functions    │
-  │  -fPIE                     Enables ASLR for text/data      │
-  │                                                            │
-  │  Layer 2 — Linker                                          │
-  │  ────────────────                                          │
-  │  -pie                      Links as position-independent   │
-  │  -Wl,-z,relro              Makes partial GOT read-only     │
-  │  -Wl,-z,now                Full RELRO (eager binding)      │
-  │  -Wl,-z,noexecstack        Non-executable stack pages      │
-  │                                                            │
-  │  Layer 3 — Filesystem / Image                              │
-  │  ─────────────────────────                                 │
-  │  Strip SUID/SGID bits      Prevent privilege escalation    │
-  │  Remove dev tools          Limit attacker toolkit          │
-  │  Strip debug symbols       Reduce information leakage      │
-  │                                                            │
-  │  Layer 4 — Buildroot Kconfig                               │
-  │  ──────────────────────────                                │
-  │  BR2_SSP_STRONG            Enables SSP globally            │
-  │  BR2_FORTIFY_SOURCE_2      Enables FORTIFY globally        │
-  │  BR2_PIE                   Enables PIE globally            │
-  │  BR2_RELRO_FULL            Enables full RELRO globally     │
-  │  BR2_STRIP_strip           Strips all target binaries      │
-  └────────────────────────────────────────────────────────────┘
-```
+**Library Selection** is driven by three axes: footprint (mbedTLS < WolfSSL < OpenSSL), ecosystem compatibility (OpenSSL wins for standard Linux), and certification requirements (WolfSSL or OpenSSL FIPS module for FIPS 140). For heavily constrained devices under 512 KB RAM, mbedTLS is the clear choice. For internet-facing general Linux targets, OpenSSL offers the widest software ecosystem. WolfSSL is the specialist choice when certification matters.
 
-**C and C++** benefit from these flags transparently; existing code requires no changes, though fixing warnings (`-Wformat-security`) may be necessary.
+**Buildroot integration** is straightforward: select the library via `menuconfig`, add `BR2_PACKAGE_CA_CERTIFICATES=y` for the root CA bundle, `BR2_PACKAGE_P11_KIT=y` for PKCS#11 support, and deploy device certificates via the `rootfs_overlay` mechanism.
 
-**Rust** provides compile-time memory safety that eliminates the classes of vulnerability that SSP and FORTIFY_SOURCE are designed to catch, making it a natural fit for new security-critical components in a Buildroot image.
+**C programming** with OpenSSL follows the EVP and SSL/BIO pattern. mbedTLS uses a flatter API with explicit context initialization — well-suited to bare-metal or musl targets. Both support hardware acceleration: OpenSSL via the Engine (legacy) or Provider (OpenSSL 3.x) API, mbedTLS via compile-time ALT implementation hooks.
 
-Together, these layers raise the cost of exploiting a production Buildroot image from "trivial one-liner" to "sophisticated multi-stage attack requiring novel techniques" — a meaningful improvement for any embedded security posture.
+**C++ RAII wrappers** are essential for safe OpenSSL usage — they prevent the pervasive resource leaks that plague raw C OpenSSL code and provide a clean session abstraction for application developers.
+
+**Hardware crypto** integration significantly improves performance and power efficiency. The cryptodev-linux kernel module provides a POSIX `/dev/crypto` interface that the OpenSSL cryptodev engine bridges to user space, enabling AES, SHA, and asymmetric acceleration on a wide range of SoCs.
+
+**PKCS#11** is the industry standard for hardware security modules, TPMs, and secure elements. The C++ `cryptoki` bindings and the Rust `cryptoki` crate both provide ergonomic access. P11-kit handles module discovery and trust policy in a Buildroot-deployed system. Keys never leave the HSM boundary: the application only passes data in and receives signatures or ciphertext out.
+
+**Rust TLS** via `rustls` and `tokio-rustls` delivers memory-safe async TLS with no C dependencies, making it ideal for new embedded services where the Rust toolchain is available in Buildroot. The `cryptoki` crate covers PKCS#11 interactions from Rust with strong type safety.
+
+**Mutual TLS** (mTLS) should be the default authentication model for device-to-cloud communication: it replaces password-based or token-based authentication with cryptographic identity anchored in the device's hardware-protected key.
+
+The security hardening checklist ensures that neither Buildroot packaging defaults nor developer convenience settings create vulnerabilities in production — always enforce TLS 1.2+, validate peer certificates, store keys in hardware where available, and strip unnecessary TLS tooling from release images.
 
 ---
 
-*Document: Buildroot Topic 22 — Security Hardening*
-*Covers: compiler hardening flags, BR2_SSP_*, BR2_RELRO_*, SUID stripping, dev-tool removal, C / C++ / Rust examples, verification.*
+*End of Chapter 23 — TLS & Cryptographic Libraries*
+
+*Next: Chapter 24 — Secure Boot & Verified Root of Trust*
