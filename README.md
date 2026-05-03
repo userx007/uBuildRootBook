@@ -2,6 +2,9 @@
 
 ## Core Architecture & Build System
 
+[00. **Buildroot Raspberry Pi**](docs/00_Buidroot_for_RaspberryPi.md)<br>
+Buildroot Image for Raspberry Pi (1–5) with Qt, I2C & SPI Support
+
 [01. **Buildroot Architecture & Build Flow**](docs/01_Buildroot_Architecture_And_Build_Flow.md)<br>
 How Buildroot orchestrates downloads, extraction, patching, configuration, compilation and installation in stages; understanding `make` internals, `output/` directory layout and `BR2_*` variables.
 
