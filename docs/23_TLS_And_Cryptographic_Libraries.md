@@ -1,4 +1,4 @@
-Now let me create the detailed markdown document:The document covers the full Buildroot Security Hardening topic across 13 sections with 8 code examples:
+# 22. Security Hardening in Buildroot
 
 **Structure:**
 - **Introduction & threat model** — why hardening matters on embedded targets, with an ASCII pipeline diagram
@@ -12,7 +12,6 @@ Now let me create the detailed markdown document:The document covers the full Bu
 
 **All graphics are ASCII art** — stack frame diagrams, virtual memory layouts, GOT overwrite models, FORTIFY_SOURCE internals, and audit report tables.
 
-# 22. Security Hardening in Buildroot
 
 ## Table of Contents
 
@@ -40,11 +39,11 @@ Buildroot provides a curated set of `BR2_SSP_*` and `BR2_RELRO_*` Kconfig option
 
 ```
   ┌─────────────────────────────────────────────────────────┐
-  │              BUILDROOT SECURITY HARDENING                │
-  │                                                          │
-  │  Source Code                                             │
-  │      │                                                   │
-  │      ▼                                                   │
+  │              BUILDROOT SECURITY HARDENING               │
+  │                                                         │
+  │  Source Code                                            │
+  │      │                                                  │
+  │      ▼                                                  │
   │  ┌──────────────────────────────────┐                   │
   │  │  Compiler (GCC / Clang)          │                   │
   │  │  -fstack-protector-strong        │                   │
@@ -52,15 +51,15 @@ Buildroot provides a curated set of `BR2_SSP_*` and `BR2_RELRO_*` Kconfig option
   │  │  -fPIE / -pie                    │                   │
   │  │  -Wl,-z,relro,-z,now             │                   │
   │  └──────────────────────────────────┘                   │
-  │      │                                                   │
-  │      ▼                                                   │
+  │      │                                                  │
+  │      ▼                                                  │
   │  ┌──────────────────────────────────┐                   │
   │  │  Linker / strip pass             │                   │
   │  │  Strip SUID bits                 │                   │
   │  │  Remove dev tools                │                   │
   │  └──────────────────────────────────┘                   │
-  │      │                                                   │
-  │      ▼                                                   │
+  │      │                                                  │
+  │      ▼                                                  │
   │  ┌──────────────────────────────────┐                   │
   │  │  Root Filesystem Image           │                   │
   │  │  Hardened, minimal, production   │                   │
@@ -88,11 +87,11 @@ The compiler and linker hardening flags described in this chapter impose virtual
   BEFORE hardening                AFTER hardening
   ─────────────────               ──────────────────
   Stack buffer overflow           Canary detects overwrite
-  ┌─────────────────┐             ┌─────────────────────┐
+  ┌─────────────────┐             ┌──────────────────────┐
   │ buf[16]         │             │ buf[16]              │
   │ saved RIP ◄─ !! │             │ canary  ◄─ checked   │
   │ ret addr        │             │ saved RIP            │
-  └─────────────────┘             └─────────────────────┘
+  └─────────────────┘             └──────────────────────┘
 
   GOT overwrite (no RELRO)        Read-only GOT (FULL RELRO)
   ┌───────────┐                   ┌───────────────────────┐
@@ -369,7 +368,7 @@ int main(int argc, char *argv[])
  *   stack_demo <"AAAA...AAAA"> (64 A's)
  *
  *   High  ┌─────────────────┐
- *         │  return address  │ ← attacker wants to reach here
+ *         │  return address │ ← attacker wants to reach here
  *         ├─────────────────┤
  *         │  saved RBP      │
  *         ├─────────────────┤
