@@ -1,4 +1,4 @@
-Now let me create the comprehensive markdown document:The document covers the full topic across ~500 lines with ASCII diagrams throughout. Here's what's included:
+# 20. Writing systemd Services for Embedded C++/Rust Daemons
 
 **Structure:**
 - **10 sections** with a linked table of contents
@@ -11,7 +11,6 @@ Now let me create the comprehensive markdown document:The document covers the fu
 
 **Key topics covered:** `Type=notify` protocol internals, all `sd_notify` message types, `CapabilityBoundingSet`, `PrivateTmp`, `ProtectSystem=strict`, `SystemCallFilter` seccomp, socket unit files, `LISTEN_FDS` fd passing, watchdog timing math, `systemd-analyze security` verification, and a language comparison table.
 
-# 20. Writing systemd Services for Embedded C++/Rust Daemons
 
 > **Buildroot Embedded Linux Series — Chapter 20**
 > Topics: `Type=notify` · `sd_notify` · Sandboxing · Socket Activation · Watchdog Integration
@@ -42,21 +41,21 @@ In embedded Linux systems built with Buildroot, system daemons require careful l
   ┌─────────────────────────────────────────────────────────────┐
   │                   EMBEDDED LINUX SYSTEM                     │
   │                                                             │
-  │  ┌──────────┐     fork/exec      ┌───────────────────────┐ │
-  │  │          │ ──────────────────▶│   Daemon Process      │ │
-  │  │ systemd  │                    │                       │ │
-  │  │  (PID 1) │ ◀────────────────── sd_notify("READY=1")  │ │
-  │  │          │   UNIX socket      │                       │ │
-  │  │          │ ──────────────────▶│   WATCHDOG ping       │ │
-  │  │          │ ◀──────────────────│   sd_notify("WATCHDOG │ │
-  │  └──────────┘                    │            =1")       │ │
-  │        │                         └───────────────────────┘ │
+  │  ┌──────────┐     fork/exec      ┌───────────────────────┐  │
+  │  │          │ ──────────────────▶│   Daemon Process      │  │
+  │  │ systemd  │                    │                       │  │
+  │  │  (PID 1) │ ◀──────────────────| sd_notify("READY=1")  │  │
+  │  │          │   UNIX socket      │                       │  │
+  │  │          │ ──────────────────▶│   WATCHDOG ping       │  │
+  │  │          │ ◀──────────────────│   sd_notify("WATCHDOG │  │
+  │  └──────────┘                    │            =1")       │  │
+  │        │                         └───────────────────────┘  │
   │        │ manages                                            │
   │        ▼                                                    │
-  │  ┌──────────────────────────────────────────────────┐      │
-  │  │            cgroup / namespace / caps             │      │
-  │  │   PrivateTmp · CapabilityBoundingSet · NoNewPriv │      │
-  │  └──────────────────────────────────────────────────┘      │
+  │  ┌──────────────────────────────────────────────────┐       │
+  │  │            cgroup / namespace / caps             │       │
+  │  │   PrivateTmp · CapabilityBoundingSet · NoNewPriv │       │
+  │  └──────────────────────────────────────────────────┘       │
   └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -169,31 +168,31 @@ Buildroot embedded targets are often deployed without human oversight. The `syst
   ┌─────────────────────────────────────────────────────┐
   │              SERVICE SECURITY LAYERS                │
   │                                                     │
-  │  ┌─────────────────────────────────────────────┐   │
-  │  │  User/Group Isolation                       │   │
-  │  │  User=mydevd  Group=mydevd  DynamicUser=yes │   │
-  │  └─────────────────────────────────────────────┘   │
-  │  ┌─────────────────────────────────────────────┐   │
-  │  │  Filesystem Isolation                       │   │
-  │  │  PrivateTmp=yes  ProtectSystem=strict       │   │
-  │  │  ReadWritePaths=/var/lib/mydevd             │   │
-  │  └─────────────────────────────────────────────┘   │
-  │  ┌─────────────────────────────────────────────┐   │
-  │  │  Capability Restriction                     │   │
-  │  │  CapabilityBoundingSet=CAP_NET_BIND_SERVICE │   │
-  │  │  AmbientCapabilities=CAP_NET_BIND_SERVICE   │   │
-  │  │  NoNewPrivileges=yes                        │   │
-  │  └─────────────────────────────────────────────┘   │
-  │  ┌─────────────────────────────────────────────┐   │
-  │  │  Syscall Filtering                          │   │
-  │  │  SystemCallFilter=@system-service           │   │
-  │  │  SystemCallArchitectures=native             │   │
-  │  └─────────────────────────────────────────────┘   │
-  │  ┌─────────────────────────────────────────────┐   │
-  │  │  Network/IPC Isolation                      │   │
-  │  │  PrivateNetwork=no  RestrictAddressFamilies │   │
-  │  │  IPAddressAllow=192.168.0.0/16              │   │
-  │  └─────────────────────────────────────────────┘   │
+  │  ┌─────────────────────────────────────────────┐    │
+  │  │  User/Group Isolation                       │    │
+  │  │  User=mydevd  Group=mydevd  DynamicUser=yes │    │
+  │  └─────────────────────────────────────────────┘    │
+  │  ┌─────────────────────────────────────────────┐    │
+  │  │  Filesystem Isolation                       │    │
+  │  │  PrivateTmp=yes  ProtectSystem=strict       │    │
+  │  │  ReadWritePaths=/var/lib/mydevd             │    │
+  │  └─────────────────────────────────────────────┘    │
+  │  ┌─────────────────────────────────────────────┐    │
+  │  │  Capability Restriction                     │    │
+  │  │  CapabilityBoundingSet=CAP_NET_BIND_SERVICE │    │
+  │  │  AmbientCapabilities=CAP_NET_BIND_SERVICE   │    │
+  │  │  NoNewPrivileges=yes                        │    │
+  │  └─────────────────────────────────────────────┘    │
+  │  ┌─────────────────────────────────────────────┐    │
+  │  │  Syscall Filtering                          │    │
+  │  │  SystemCallFilter=@system-service           │    │
+  │  │  SystemCallArchitectures=native             │    │
+  │  └─────────────────────────────────────────────┘    │
+  │  ┌─────────────────────────────────────────────┐    │
+  │  │  Network/IPC Isolation                      │    │
+  │  │  PrivateNetwork=no  RestrictAddressFamilies │    │
+  │  │  IPAddressAllow=192.168.0.0/16              │    │
+  │  └─────────────────────────────────────────────┘    │
   └─────────────────────────────────────────────────────┘
 ```
 
@@ -272,7 +271,7 @@ Socket activation allows systemd to pre-create sockets and pass them to the daem
      │──▶ creates socket          │                             │
      │    binds & listens         │                             │
      │                            │                             │
-  Client ─── connect() ─────────▶│                             │
+  Client ─── connect() ─────────▶ │                             │
      │                            │  [trigger]                  │
      │                            │──────────────────────────▶  │
      │                            │    pass fd via              │
@@ -280,7 +279,7 @@ Socket activation allows systemd to pre-create sockets and pass them to the daem
      │                            │                             │  [daemon starts]
      │                            │                             │  sd_listen_fds()
      │                            │                             │  accepts on fd 3
-     │ ◀────────────────────────────────────────────────────── │
+     │ ◀──────────────────────────────────────────────────────  │
      │         response                                         │
 ```
 
@@ -1406,30 +1405,30 @@ This chapter covered the full lifecycle of writing robust, secure, production-gr
 
 ```
   ┌────────────────────────────────────────────────────────────────┐
-  │              CHAPTER 20 — CONCEPT MAP                         │
+  │              CHAPTER 20 — CONCEPT MAP                          │
   │                                                                │
-  │  Type=notify ──────────▶ sd_notify("READY=1")                 │
-  │       │                        │                              │
+  │  Type=notify ──────────▶ sd_notify("READY=1")                  │
+  │       │                        │                               │
   │       │                  sent via UNIX socket                  │
   │       │                  ($NOTIFY_SOCKET)                      │
   │       ▼                                                        │
   │  systemd waits          NotifyAccess=main                      │
-  │  until READY            restricts who can notify              │
+  │  until READY            restricts who can notify               │
   │                                                                │
-  │  ─────────────────────────────────────────────────────────    │
+  │  ─────────────────────────────────────────────────────────     │
   │                                                                │
-  │  WatchdogSec=N ────────▶ daemon must sd_notify("WATCHDOG=1")  │
+  │  WatchdogSec=N ────────▶ daemon must sd_notify("WATCHDOG=1")   │
   │                          every N/2 seconds or get killed       │
   │                          and auto-restarted                    │
   │                                                                │
-  │  ─────────────────────────────────────────────────────────    │
+  │  ─────────────────────────────────────────────────────────     │
   │                                                                │
-  │  mydevd.socket ────────▶ systemd holds socket at boot         │
+  │  mydevd.socket ────────▶ systemd holds socket at boot          │
   │       │                  daemon starts ON DEMAND               │
-  │       └──triggers──────▶ mydevd.service receives fd via       │
+  │       └──triggers──────▶ mydevd.service receives fd via        │
   │                          LISTEN_FDS environment variable       │
   │                                                                │
-  │  ─────────────────────────────────────────────────────────    │
+  │  ─────────────────────────────────────────────────────────     │
   │                                                                │
   │  Sandboxing layers:                                            │
   │    PrivateTmp            → isolated /tmp namespace             │

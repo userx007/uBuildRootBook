@@ -123,7 +123,7 @@ make -j$(nproc)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  make  →  fakeroot  →  makedevs  →  mkfs.ext4  →  rootfs.ext4  │
+│  make  →  fakeroot  →  makedevs  →  mkfs.ext4  →  rootfs.ext4   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

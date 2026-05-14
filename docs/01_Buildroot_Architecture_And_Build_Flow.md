@@ -1282,7 +1282,7 @@ fi
 ║  INPUT                          PIPELINE                   OUTPUT            ║
 ║  ─────                          ────────                   ──────            ║
 ║                                                                              ║
-║  .config ──────────────▶  ┌─────────────────────┐                            ║
+║  .config ──────────────▶   ┌─────────────────────┐                           ║
 ║  (BR2_* variables)         │  1. DOWNLOAD        │──▶ dl/                    ║
 ║                            │  2. EXTRACT         │──▶ build/<pkg>/           ║
 ║  package/*/                │  3. PATCH           │──▶ build/<pkg>/ (patched) ║

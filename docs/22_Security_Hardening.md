@@ -82,7 +82,7 @@ These map directly to compiler and linker flags applied globally across the enti
 |-------------------------------|-----------------------------|------------------|
 | `BR2_SSP_NONE`                | (no flag)                   | None             |
 | `BR2_SSP_REGULAR`             | `-fstack-protector`         | Functions with 8-byte buffers |
-| `BR2_SSP_STRONG`              | `-fstack-protector-strong`  | More functions, all arrays |
+| `BR2_SSP_STRONG`              | `-fstack-protector-strong`  | More functions, all arrays    |
 | `BR2_SSP_ALL`                 | `-fstack-protector-all`     | Every function (highest cost) |
 
 **Recommended:** `BR2_SSP_STRONG` — good security/performance balance.
@@ -98,8 +98,8 @@ BR2_SSP_STRONG=y
 | Symbol               | Linker Flag            | Effect |
 |----------------------|------------------------|--------|
 | `BR2_RELRO_NONE`     | (none)                 | GOT is writable at all times |
-| `BR2_RELRO_PARTIAL`  | `-Wl,-z,relro`         | Partial GOT protection |
-| `BR2_RELRO_FULL`     | `-Wl,-z,relro,-z,now`  | Full GOT locked before main() |
+| `BR2_RELRO_PARTIAL`  | `-Wl,-z,relro`         | Partial GOT protection       |
+| `BR2_RELRO_FULL`     | `-Wl,-z,relro,-z,now`  | Full GOT locked before main()|
 
 **Recommended:** `BR2_RELRO_FULL` for maximum protection; it forces eager binding (all symbols
 resolved at load time), which slightly increases startup latency but removes the writable GOT

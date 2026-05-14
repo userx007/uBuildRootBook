@@ -948,12 +948,12 @@ int main()
 │          │    ARMv7     │   AArch64    │   AArch64    │
 │   RAM    │   256 MB     │   512 MB     │   2048 MB    │
 ├──────────┼──────────────┼──────────────┼──────────────┤
-│  GPU     │   ✘  no      │   ✔  YES     │   ✔  YES    │
-│  NVMe    │   ✘  no      │   ✘  no      │   ✔  YES    │
-│  WiFi    │   ✔  YES     │   ✔  YES     │   ✘  no     │
-│  BT      │   ✔  YES     │   ✔  YES     │   ✘  no     │
-│  CAN     │   ✘  no      │   ✘  no      │   ✘  no     │
-│  TPM     │   ✘  no      │   ✔  YES     │   ✔  YES    │
+│  GPU     │   -  no      │   +  YES     │   +  YES     │
+│  NVMe    │   -  no      │   -  no      │   +  YES     │
+│  WiFi    │   +  YES     │   +  YES     │   -  no      │
+│  BT      │   +  YES     │   +  YES     │   -  no      │
+│  CAN     │   -  no      │   -  no      │   -  no      │
+│  TPM     │   -  no      │   +  YES     │   +  YES     │
 └──────────┴──────────────┴──────────────┴──────────────┘
 
   Boards with GPU + TPM:

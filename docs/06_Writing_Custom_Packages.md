@@ -1,4 +1,4 @@
-Now let me create the detailed markdown document:Here's the complete Module 06 document. It covers:
+# 06. Writing Custom Packages from Scratch
 
 **Structure & Anatomy** — How every package maps to a `Config.in` + `.mk` pair, with a full variable reference table and the Kconfig constructs used for menu integration.
 
@@ -12,10 +12,6 @@ Now let me create the detailed markdown document:Here's the complete Module 06 d
 **Build hooks** — The full `POST_EXTRACT → POST_BUILD → INSTALL_INIT_SYSV/SYSTEMD` chain with code examples.
 
 **Debugging section** — `make myapp-show-vars`, `V=1`, `dirclean`, `readelf` checks for correct target architecture.
-
-All diagrams are ASCII/box-drawing character based as requested.
-
-# 06. Writing Custom Packages from Scratch
 
 > **Buildroot Series — Module 06**
 > Full anatomy of a `.mk` + `Config.in` pair, local source packages (`BR2_OVERRIDE_SRCDIR`),
@@ -62,24 +58,24 @@ a handful of variable assignments.
 
 ```
   ┌─────────────────────────────────────────────────────────┐
-  │                  Buildroot Package Flow                  │
+  │                  Buildroot Package Flow                 │
   │                                                         │
   │  Config.in ──► menuconfig ──► .config                   │
   │                                   │                     │
   │                                   ▼                     │
   │  mypackage.mk ──► fetch ──► extract ──► patch           │
-  │                                              │           │
-  │                                              ▼           │
-  │                                         configure        │
-  │                                              │           │
-  │                                              ▼           │
-  │                                           build          │
-  │                                              │           │
-  │                                              ▼           │
-  │                                    install to staging    │
-  │                                              │           │
-  │                                              ▼           │
-  │                                    install to target     │
+  │                                              │          │
+  │                                              ▼          │
+  │                                         configure       │
+  │                                              │          │
+  │                                              ▼          │
+  │                                           build         │
+  │                                              │          │
+  │                                              ▼          │
+  │                                    install to staging   │
+  │                                              │          │
+  │                                              ▼          │
+  │                                    install to target    │
   └─────────────────────────────────────────────────────────┘
 ```
 
@@ -133,7 +129,7 @@ Key Kconfig constructs used in packages:
 | `select`         | Automatically enable another config symbol                   |
 | `default y/n`    | Set a default value                                          |
 | `if … endif`     | Conditional block (useful for sub-options)                   |
-| `choice … endchoice` | Mutually exclusive group of options                    |
+| `choice … endchoice` | Mutually exclusive group of options                      |
 | `string`         | Free-form string option (e.g., for paths or names)           |
 
 The symbol name **must** follow the pattern `BR2_PACKAGE_<UPPERCASE_PKGNAME>`.
@@ -266,11 +262,11 @@ echo "MYAPP_OVERRIDE_SRCDIR = /home/dev/myapp" >> local.mk
   │         │                                                │
   │         │  rsync (Buildroot copies changed files only)   │
   │         ▼                                                │
-  │  output/build/myapp-custom/  ← Buildroot build dir      │
+  │  output/build/myapp-custom/  ← Buildroot build dir       │
   │         │                                                │
   │         │  configure / make / install                    │
   │         ▼                                                │
-  │  output/target/usr/bin/myapp  ← target rootfs           │
+  │  output/target/usr/bin/myapp  ← target rootfs            │
   └──────────────────────────────────────────────────────────┘
 ```
 
@@ -495,7 +491,7 @@ void draw_pipeline()
     std::cout << "\n";
     std::cout << "  Source  ──►  Fetch  ──►  Patch  ──►  Build\n";
     std::cout << "    │                                     │\n";
-    std::cout << "    │   Git / Tarball / Local              │\n";
+    std::cout << "    │   Git / Tarball / Local             │\n";
     std::cout << "    └─────────────────────────────────────┘\n";
     std::cout << "                                     │\n";
     std::cout << "                                     ▼\n";
@@ -643,18 +639,18 @@ fn draw_cross_compile() {
     let lines = [
         "",
         "  ┌──────────────────────────────────────────┐",
-        "  │         Cross-Compilation Pipeline        │",
+        "  │         Cross-Compilation Pipeline       │",
         "  ├──────────────────────────────────────────┤",
         "  │  Host x86_64                             │",
         "  │  ┌─────────┐   rustc --target            │",
         "  │  │ Cargo   │──────────────────────────►  │",
-        "  │  │ build   │   aarch64-linux-musl         │",
+        "  │  │ build   │   aarch64-linux-musl        │",
         "  │  └─────────┘                             │",
-        "  │       │                                   │",
-        "  │       ▼                                   │",
+        "  │       │                                  │",
+        "  │       ▼                                  │",
         "  │  hello_rust  (ELF ARM64 static binary)   │",
-        "  │       │                                   │",
-        "  │       ▼                                   │",
+        "  │       │                                  │",
+        "  │       ▼                                  │",
         "  │  output/target/usr/bin/hello_rust        │",
         "  └──────────────────────────────────────────┘",
         "",
@@ -740,7 +736,7 @@ The table below lists the most important variables available in any `.mk` file.
 |-----------------------------|----------------------------------------------------------|
 | `PKGNAME_VERSION`           | Version string used in tarball name and build dir        |
 | `PKGNAME_SITE`              | URL or path to source                                    |
-| `PKGNAME_SITE_METHOD`       | `wget`, `git`, `svn`, `local`, `scp`, etc.              |
+| `PKGNAME_SITE_METHOD`       | `wget`, `git`, `svn`, `local`, `scp`, etc.               |
 | `PKGNAME_SOURCE`            | Tarball filename (default: `$(NAME)-$(VERSION).tar.gz`)  |
 | `PKGNAME_LICENSE`           | SPDX license identifier(s)                               |
 | `PKGNAME_LICENSE_FILES`     | File(s) in source containing the license text            |
@@ -751,7 +747,7 @@ The table below lists the most important variables available in any `.mk` file.
 | `PKGNAME_INSTALL_TARGET`    | `YES` (default) — install into `$(TARGET_DIR)`           |
 | `PKGNAME_INSTALL_STAGING`   | `YES` — install into `$(STAGING_DIR)` (libraries)        |
 | `PKGNAME_GIT_SUBMODULES`    | `YES` — clone submodules for Git sources                 |
-| `TARGET_CONFIGURE_OPTS`     | `CC`, `CXX`, `AR`, `CFLAGS`, `LDFLAGS` for cross-compile|
+| `TARGET_CONFIGURE_OPTS`     | `CC`, `CXX`, `AR`, `CFLAGS`, `LDFLAGS` for cross-compile |
 | `$(TARGET_DIR)`             | Root of the target filesystem being assembled            |
 | `$(STAGING_DIR)`            | Sysroot for cross-compilation headers and libraries      |
 | `$(HOST_DIR)`               | Tools installed on the build host                        |
@@ -798,7 +794,7 @@ Hook naming follows the pattern: `PKGNAME_<STAGE>_CMDS` or `PKGNAME_INSTALL_INIT
   ┌──────────────────────────────────────────────────────────┐
   │                   Hook Execution Order                   │
   │                                                          │
-  │  POST_EXTRACT ──► POST_RSYNC ──► PRE_CONFIGURE          │
+  │  POST_EXTRACT ──► POST_RSYNC ──► PRE_CONFIGURE           │
   │                                       │                  │
   │                               POST_CONFIGURE             │
   │                                       │                  │
@@ -879,11 +875,11 @@ Writing a custom Buildroot package boils down to two files and the right infrast
   │                     + infrastructure macro call          │
   │                                                          │
   │  Source Types:                                           │
-  │  ┌────────────┬────────────────────────────────────┐    │
-  │  │ Tarball    │ SITE=https://...  METHOD=wget       │    │
-  │  │ Git        │ SITE=https://git  METHOD=git        │    │
-  │  │ Local/Dev  │ OVERRIDE_SRCDIR=/path  METHOD=local │    │
-  │  └────────────┴────────────────────────────────────┘    │
+  │  ┌────────────┬────────────────────────────────────┐     │
+  │  │ Tarball    │ SITE=https://...  METHOD=wget      │     │
+  │  │ Git        │ SITE=https://git  METHOD=git       │     │
+  │  │ Local/Dev  │ OVERRIDE_SRCDIR=/path  METHOD=local│     │
+  │  └────────────┴────────────────────────────────────┘     │
   │                                                          │
   │  Language Support:                                       │
   │  • C        ──  generic-package  +  TARGET_CONFIGURE_OPTS│
@@ -891,10 +887,10 @@ Writing a custom Buildroot package boils down to two files and the right infrast
   │  • Rust     ──  cargo-package    +  CARGO_ENV            │
   │                                                          │
   │  Key Workflow:                                           │
-  │  1. Write Config.in → appears in menuconfig             │
-  │  2. Write .mk      → defines fetch + build + install    │
-  │  3. Source Config.in from package/Config.in             │
-  │  4. make menuconfig → enable package                    │
+  │  1. Write Config.in → appears in menuconfig              │
+  │  2. Write .mk      → defines fetch + build + install     │
+  │  3. Source Config.in from package/Config.in              │
+  │  4. make menuconfig → enable package                     │
   │  5. make (or make myapp)                                 │
   └──────────────────────────────────────────────────────────┘
 ```

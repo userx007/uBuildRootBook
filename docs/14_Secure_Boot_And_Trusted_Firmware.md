@@ -69,21 +69,21 @@ Environment (TEE)** for ARM-based SoCs.
 │  │                      │    │                                       │  │
 │  │  ┌────────────────┐  │    │  ┌─────────────────────────────────┐  │  │
 │  │  │  Linux Kernel  │  │    │  │         OP-TEE OS               │  │  │
-│  │  └───────┬────────┘  │    │  │  ┌───────────┐ ┌─────────────┐ │  │  │
-│  │          │           │    │  │  │ Trusted   │ │  Crypto     │ │  │  │
-│  │  ┌───────┴────────┐  │    │  │  │   Apps    │ │  Services   │ │  │  │
-│  │  │ TEE Client API │◄─┼────┼──┼──┤  (TAs)    │ │  (AES/RSA)  │ │  │  │
-│  │  │  (optee-client)│  │    │  │  └───────────┘ └─────────────┘ │  │  │
+│  │  └───────┬────────┘  │    │  │  ┌───────────┐ ┌─────────────┐  │  │  │
+│  │          │           │    │  │  │ Trusted   │ │  Crypto     │  │  │  │
+│  │  ┌───────┴────────┐  │    │  │  │   Apps    │ │  Services   │  │  │  │
+│  │  │ TEE Client API │◄─┼────┼──┼──┤  (TAs)    │ │  (AES/RSA)  │  │  │  │
+│  │  │  (optee-client)│  │    │  │  └───────────┘ └─────────────┘  │  │  │
 │  │  └────────────────┘  │    │  └─────────────────────────────────┘  │  │
 │  │                      │    │                                       │  │
 │  └──────────────────────┘    └───────────────────────────────────────┘  │
 │                                                                         │
-│  ═══════════════════════ ARM TrustZone Hardware ═══════════════════════  │
+│  ═══════════════════════ ARM TrustZone Hardware ═══════════════════════ │
 │                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                  ARM Trusted Firmware-A (EL3)                    │   │
-│  │   BL1 (ROM)  ──►  BL2 (Trusted Boot)  ──►  BL31 (Secure Mon.)  │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                  ARM Trusted Firmware-A (EL3)                   │    │
+│  │   BL1 (ROM)  ──►  BL2 (Trusted Boot)  ──►  BL31 (Secure Mon.)   │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -112,27 +112,27 @@ domains enforced in hardware.
 │                   ARM TRUSTZONE MEMORY MAP                            │
 │                                                                       │
 │  Physical Address Space                                               │
-│  0xFFFFFFFF ┌─────────────────────────────────────────────────────┐  │
-│             │  Secure ROM / BL1 entry (platform-specific)         │  │
-│             ├─────────────────────────────────────────────────────┤  │
-│             │  Trusted SRAM  [S-bit=1, NS=0]                      │  │
-│             │  ┌──────────┐ ┌──────────┐ ┌───────────────────┐   │  │
-│             │  │   BL2    │ │  BL31    │ │   OP-TEE (BL32)   │   │  │
-│             │  │  (Boot)  │ │  (Mon.)  │ │   Heap/Stack      │   │  │
-│             │  └──────────┘ └──────────┘ └───────────────────┘   │  │
-│             ├─────────────────────────────────────────────────────┤  │
-│             │  Shared Memory (NS-bit set, TEE-configured)         │  │
-│             │  ← used for SMC parameter passing →                 │  │
-│             ├─────────────────────────────────────────────────────┤  │
-│             │  Non-Secure DRAM  [NS=1]                            │  │
-│             │  ┌──────────────┐ ┌─────────────────────────────┐  │  │
-│             │  │  U-Boot/BL33 │ │   Linux Kernel + Userspace  │  │  │
-│             │  └──────────────┘ └─────────────────────────────┘  │  │
-│  0x00000000 └─────────────────────────────────────────────────────┘  │
+│  0xFFFFFFFF ┌─────────────────────────────────────────────────────┐   │
+│             │  Secure ROM / BL1 entry (platform-specific)         │   │
+│             ├─────────────────────────────────────────────────────┤   │
+│             │  Trusted SRAM  [S-bit=1, NS=0]                      │   │
+│             │  ┌──────────┐ ┌──────────┐ ┌───────────────────┐    │   │
+│             │  │   BL2    │ │  BL31    │ │   OP-TEE (BL32)   │    │   │
+│             │  │  (Boot)  │ │  (Mon.)  │ │   Heap/Stack      │    │   │
+│             │  └──────────┘ └──────────┘ └───────────────────┘    │   │
+│             ├─────────────────────────────────────────────────────┤   │
+│             │  Shared Memory (NS-bit set, TEE-configured)         │   │
+│             │  ← used for SMC parameter passing →                 │   │
+│             ├─────────────────────────────────────────────────────┤   │
+│             │  Non-Secure DRAM  [NS=1]                            │   │
+│             │  ┌──────────────┐ ┌─────────────────────────────┐   │   │
+│             │  │  U-Boot/BL33 │ │   Linux Kernel + Userspace  │   │   │
+│             │  └──────────────┘ └─────────────────────────────┘   │   │
+│  0x00000000 └─────────────────────────────────────────────────────┘   │
 │                                                                       │
-│  NS-bit: Non-Secure Memory Attribute (AXI bus signal)                │
-│  TZASC:  TrustZone Address Space Controller (enforces NS-bit)        │
-│  TZPC:   TrustZone Protection Controller (peripheral NS/S)           │
+│  NS-bit: Non-Secure Memory Attribute (AXI bus signal)                 │
+│  TZASC:  TrustZone Address Space Controller (enforces NS-bit)         │
+│  TZPC:   TrustZone Protection Controller (peripheral NS/S)            │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,42 +175,42 @@ domains enforced in hardware.
 │  POWER ON                                                                   │
 │     │                                                                       │
 │     ▼                                                                       │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │  BL1  — On-chip ROM / eFUSE-anchored trust root                      │  │
-│  │  • Loads BL2 from storage (eMMC/NOR/NAND)                            │  │
-│  │  • Verifies BL2 signature with OEM public key burned into OTP/eFUSE  │  │
-│  │  • If invalid → halt / lockout                                        │  │
-│  └────────────────────────────┬─────────────────────────────────────────┘  │
-│                               │  Verified ✓                                │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │  BL1  — On-chip ROM / eFUSE-anchored trust root                      │   │
+│  │  • Loads BL2 from storage (eMMC/NOR/NAND)                            │   │
+│  │  • Verifies BL2 signature with OEM public key burned into OTP/eFUSE  │   │
+│  │  • If invalid → halt / lockout                                       │   │
+│  └────────────────────────────┬─────────────────────────────────────────┘   │
+│                               │  Verified ✓                                 │
 │                               ▼                                             │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │  BL2  — Trusted Boot firmware                                         │  │
-│  │  • Loads and verifies BL31, BL32 (OP-TEE), BL33 (U-Boot)            │  │
-│  │  • Configures TZASC / TZPC memory protection                         │  │
-│  │  • Populates firmware handoff (FW_CONFIG, HW_CONFIG DTBs)            │  │
-│  └────────────────────────────┬─────────────────────────────────────────┘  │
-│                               │  Verified ✓                                │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │  BL2  — Trusted Boot firmware                                        │   │
+│  │  • Loads and verifies BL31, BL32 (OP-TEE), BL33 (U-Boot)             │   │
+│  │  • Configures TZASC / TZPC memory protection                         │   │
+│  │  • Populates firmware handoff (FW_CONFIG, HW_CONFIG DTBs)            │   │
+│  └────────────────────────────┬─────────────────────────────────────────┘   │
+│                               │  Verified ✓                                 │
 │                               ▼                                             │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │  BL31 — Secure Monitor (runs at EL3 forever)                          │  │
-│  │  • Installs EL3 exception vectors                                     │  │
-│  │  • Manages power states (PSCI)                                        │  │
-│  │  • Dispatches SMCs to OP-TEE or SPMD                                  │  │
-│  └───────┬───────────────────────────────────────┬────────────────────┘  │
-│          │  Hands off to BL32                    │  Hands off to BL33     │
-│          ▼                                        ▼                        │
-│  ┌──────────────────────┐              ┌─────────────────────────────┐    │
-│  │  BL32  — OP-TEE OS   │              │  BL33  — U-Boot             │    │
-│  │  • TEE kernel init   │              │  • Verifies FIT image       │    │
-│  │  • TA loader / mgr   │              │  • Kernel + DTB signature   │    │
-│  │  • Waits for SMC     │              │  • Boots Linux              │    │
-│  └──────────────────────┘              └──────────────┬──────────────┘    │
-│                                                        │  Verified ✓       │
-│                                                        ▼                   │
-│                                           ┌─────────────────────────┐     │
-│                                           │  Linux Kernel  (EL1)    │     │
-│                                           │  + optee-client driver  │     │
-│                                           └─────────────────────────┘     │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │  BL31 — Secure Monitor (runs at EL3 forever)                         │   │
+│  │  • Installs EL3 exception vectors                                    │   │
+│  │  • Manages power states (PSCI)                                       │   │
+│  │  • Dispatches SMCs to OP-TEE or SPMD                                 │   │
+│  └───────┬───────────────────────────────────────┬──────────────────────┘   │
+│          │  Hands off to BL32                    │  Hands off to BL33       │
+│          ▼                                       ▼                          │
+│  ┌──────────────────────┐              ┌─────────────────────────────┐      │
+│  │  BL32  — OP-TEE OS   │              │  BL33  — U-Boot             │      │
+│  │  • TEE kernel init   │              │  • Verifies FIT image       │      │
+│  │  • TA loader / mgr   │              │  • Kernel + DTB signature   │      │
+│  │  • Waits for SMC     │              │  • Boots Linux              │      │
+│  └──────────────────────┘              └──────────────┬──────────────┘      │
+│                                                       │  Verified ✓         │
+│                                                       ▼                     │
+│                                           ┌─────────────────────────┐       │
+│                                           │  Linux Kernel  (EL1)    │       │
+│                                           │  + optee-client driver  │       │
+│                                           └─────────────────────────┘       │
 └─────────────────────────────────────────────────────────────────────────────┘
 
   Legend:
@@ -301,45 +301,45 @@ BR2_PACKAGE_OPTEE_CLIENT_EXAMPLES=y
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      OP-TEE SOFTWARE STACK                          │
 │                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                  NORMAL WORLD (Linux)                        │  │
-│  │                                                              │  │
-│  │  User App         CA (Client App)                           │  │
-│  │     │                    │                                   │  │
-│  │     └────────────────────┤                                   │  │
-│  │                          ▼                                   │  │
-│  │              ┌──────────────────────┐                        │  │
-│  │              │  libteec.so          │  TEE Client API        │  │
-│  │              │  (optee-client)      │  GP TEE spec           │  │
-│  │              └──────────┬───────────┘                        │  │
-│  │                         │  /dev/tee0  (ioctl)               │  │
-│  │              ┌──────────▼───────────┐                        │  │
-│  │              │  tee.ko (kernel drv) │  Linux TEE subsystem   │  │
-│  │              └──────────┬───────────┘                        │  │
-│  │                         │  SMC instruction                   │  │
-│  └─────────────────────────┼──────────────────────────────────┘  │
-│  ═══════════════════ TrustZone boundary ═══════════════════════   │
-│  ┌─────────────────────────┼──────────────────────────────────┐  │
-│  │                         ▼          SECURE WORLD             │  │
-│  │              ┌──────────────────────┐                        │  │
-│  │              │  BL31 SMC handler    │  Secure Monitor (EL3)  │  │
-│  │              └──────────┬───────────┘                        │  │
-│  │                         │  World switch to S-EL1             │  │
-│  │              ┌──────────▼───────────┐                        │  │
-│  │              │  OP-TEE Core (BL32)  │  Secure Kernel (S-EL1) │  │
-│  │              │  ┌────────────────┐  │                        │  │
-│  │              │  │  TA Manager    │  │                        │  │
-│  │              │  │  Session Mgr   │  │                        │  │
-│  │              │  │  Crypto Engine │  │                        │  │
-│  │              │  │  Secure Store  │  │                        │  │
-│  │              │  └────────────────┘  │                        │  │
-│  │              └──────────┬───────────┘                        │  │
-│  │                         │  TA context switch                 │  │
-│  │              ┌──────────▼───────────┐                        │  │
-│  │              │  Trusted Application │  (S-EL0, per session)  │  │
-│  │              │  (TA UUID: binary)   │                        │  │
-│  │              └──────────────────────┘                        │  │
-│  └──────────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                  NORMAL WORLD (Linux)                        │   │
+│  │                                                              │   │
+│  │  User App         CA (Client App)                            │   │
+│  │     │                    │                                   │   │
+│  │     └────────────────────┤                                   │   │
+│  │                          ▼                                   │   │
+│  │              ┌──────────────────────┐                        │   │
+│  │              │  libteec.so          │  TEE Client API        │   │
+│  │              │  (optee-client)      │  GP TEE spec           │   │
+│  │              └──────────┬───────────┘                        │   │
+│  │                         │  /dev/tee0  (ioctl)                │   │
+│  │              ┌──────────▼───────────┐                        │   │
+│  │              │  tee.ko (kernel drv) │  Linux TEE subsystem   │   │
+│  │              └──────────┬───────────┘                        │   │
+│  │                         │  SMC instruction                   │   │
+│  └─────────────────────────┼────────────────────────────────────┘   │
+│  ═══════════════════ TrustZone boundary ═══════════════════════     │
+│  ┌─────────────────────────┼────────────────────────────────────┐   │
+│  │                         ▼          SECURE WORLD              │   │
+│  │              ┌──────────────────────┐                        │   │
+│  │              │  BL31 SMC handler    │  Secure Monitor (EL3)  │   │
+│  │              └──────────┬───────────┘                        │   │
+│  │                         │  World switch to S-EL1             │   │
+│  │              ┌──────────▼───────────┐                        │   │
+│  │              │  OP-TEE Core (BL32)  │  Secure Kernel (S-EL1) │   │
+│  │              │  ┌────────────────┐  │                        │   │
+│  │              │  │  TA Manager    │  │                        │   │
+│  │              │  │  Session Mgr   │  │                        │   │
+│  │              │  │  Crypto Engine │  │                        │   │
+│  │              │  │  Secure Store  │  │                        │   │
+│  │              │  └────────────────┘  │                        │   │
+│  │              └──────────┬───────────┘                        │   │
+│  │                         │  TA context switch                 │   │
+│  │              ┌──────────▼───────────┐                        │   │
+│  │              │  Trusted Application │  (S-EL0, per session)  │   │
+│  │              │  (TA UUID: binary)   │                        │   │
+│  │              └──────────────────────┘                        │   │
+│  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -369,7 +369,7 @@ execution.
 │                    FIT IMAGE (.itb) LAYOUT                          │
 │                                                                     │
 │  FDT Header (magic: 0xd00dfeed)                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
+│  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  / (root)                                                    │   │
 │  │  ├── description = "Signed Linux FIT"                        │   │
 │  │  ├── timestamp   = <unix epoch>                              │   │
@@ -387,7 +387,7 @@ execution.
 │  │  │   ├── fdt@1          (Device Tree Blob)                   │   │
 │  │  │   │   └── signature@1  (signed with same key)             │   │
 │  │  │   │                                                       │   │
-│  │  │   └── ramdisk@1      (initramfs, optional)               │   │
+│  │  │   └── ramdisk@1      (initramfs, optional)                │   │
 │  │  │                                                           │   │
 │  │  └── configurations/                                         │   │
 │  │      └── conf@1                                              │   │
@@ -398,7 +398,7 @@ execution.
 │  │              ├── algo  = "sha256,rsa4096"                    │   │
 │  │              ├── key-name-hint = "dev-key"                   │   │
 │  │              └── signed-images = "kernel", "fdt"             │   │
-│  └─────────────────────────────────────────────────────────────┘   │
+│  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -583,18 +583,18 @@ echo "FIP image assembled: ${BINARIES_DIR}/fip.bin"
 │  ┌─────────────────┐                                                │
 │  │  FIP Header     │  Magic + version + ToC entry count             │
 │  ├─────────────────┤                                                │
-│  │  ToC Entry[0]   │  UUID: BL2  → offset, size                    │
-│  │  ToC Entry[1]   │  UUID: BL31 → offset, size                    │
-│  │  ToC Entry[2]   │  UUID: BL32 (OP-TEE) → offset, size           │
-│  │  ToC Entry[3]   │  UUID: BL33 (U-Boot) → offset, size           │
+│  │  ToC Entry[0]   │  UUID: BL2  → offset, size                     │
+│  │  ToC Entry[1]   │  UUID: BL31 → offset, size                     │
+│  │  ToC Entry[2]   │  UUID: BL32 (OP-TEE) → offset, size            │
+│  │  ToC Entry[3]   │  UUID: BL33 (U-Boot) → offset, size            │
 │  ├─────────────────┤                                                │
-│  │  BL2 binary     │  (verified by BL1 ROTPK)                      │
+│  │  BL2 binary     │  (verified by BL1 ROTPK)                       │
 │  ├─────────────────┤                                                │
 │  │  BL31 binary    │  Secure Monitor                                │
 │  ├─────────────────┤                                                │
-│  │  OP-TEE binary  │  tee-pager_v2.bin + tee-pageable_v2.bin       │
+│  │  OP-TEE binary  │  tee-pager_v2.bin + tee-pageable_v2.bin        │
 │  ├─────────────────┤                                                │
-│  │  U-Boot binary  │  BL33, normal-world loader                    │
+│  │  U-Boot binary  │  BL33, normal-world loader                     │
 │  └─────────────────┘                                                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -1569,40 +1569,40 @@ fn main() {
   │                         TRUST CHAIN / PKI HIERARCHY                      │
   │                                                                          │
   │   ┌──────────────────────────────────┐                                   │
-  │   │   Root of Trust (RoT)            │  ← Burned into OTP/eFUSE at MFG  │
-  │   │   ROTPK (Root-of-Trust Pub Key)  │    (SHA256 hash of OEM pub key)  │
+  │   │   Root of Trust (RoT)            │  ← Burned into OTP/eFUSE at MFG   │
+  │   │   ROTPK (Root-of-Trust Pub Key)  │    (SHA256 hash of OEM pub key)   │
   │   └────────────────┬─────────────────┘                                   │
-  │                    │  Signs                                               │
-  │                    ▼                                                      │
+  │                    │  Signs                                              │
+  │                    ▼                                                     │
   │   ┌──────────────────────────────────┐                                   │
-  │   │   BL2 Content Certificate        │  ROT private key (offline/HSM)   │
+  │   │   BL2 Content Certificate        │  ROT private key (offline/HSM)    │
   │   │   Trusted Key Certificate        │                                   │
   │   └──────┬──────────────────┬────────┘                                   │
-  │           │  Signs           │  Signs                                     │
-  │           ▼                  ▼                                            │
+  │          │  Signs           │  Signs                                     │
+  │          ▼                  ▼                                            │
   │   ┌─────────────┐    ┌──────────────┐                                    │
-  │   │ BL31 Cert   │    │ BL32 Cert    │   SoC Firmware Key (intermediate) │
+  │   │ BL31 Cert   │    │ BL32 Cert    │   SoC Firmware Key (intermediate)  │
   │   │ (TF-A Mon.) │    │ (OP-TEE)     │                                    │
   │   └─────────────┘    └──────────────┘                                    │
-  │           │                  │                                            │
-  │           ▼                  ▼                                            │
+  │           │                  │                                           │
+  │           ▼                  ▼                                           │
   │   ┌─────────────┐    ┌──────────────┐                                    │
   │   │  BL31 Image │    │  BL32 Image  │                                    │
   │   │  (binary)   │    │  (binary)    │                                    │
   │   └─────────────┘    └──────────────┘                                    │
   │                                                                          │
   │   ┌──────────────────────────────────┐                                   │
-  │   │   Non-Trusted Firmware Cert      │   Non-Trusted World Key          │
+  │   │   Non-Trusted Firmware Cert      │   Non-Trusted World Key           │
   │   └────────────────┬─────────────────┘                                   │
-  │                    │  Signs                                               │
-  │                    ▼                                                      │
+  │                    │  Signs                                              │
+  │                    ▼                                                     │
   │   ┌──────────────────────────────────┐                                   │
   │   │   BL33 (U-Boot) Image Cert       │                                   │
   │   └──────────────────────────────────┘                                   │
-  │                    │  Signs (via mkimage)                                 │
-  │                    ▼                                                      │
+  │                    │  Signs (via mkimage)                                │
+  │                    ▼                                                     │
   │   ┌──────────────────────────────────┐                                   │
-  │   │   FIT Image (kernel + DTB)       │   Development/Release Key        │
+  │   │   FIT Image (kernel + DTB)       │   Development/Release Key         │
   │   └──────────────────────────────────┘                                   │
   └──────────────────────────────────────────────────────────────────────────┘
 
@@ -1687,8 +1687,8 @@ BR2_PACKAGE_OPTEE_OS_ADDITIONAL_VARIABLES="CFG_TEE_CORE_LOG_LEVEL=3"
 ```
   Device (Prover)                          Verifier (Server)
   ───────────────                          ─────────────────
-  Boot: TF-A + OP-TEE                           │
-  └─► PCR measurements logged                   │
+  Boot: TF-A + OP-TEE                            │
+  └─► PCR measurements logged                    │
       in OP-TEE secure storage                   │
               │                                  │
               │  ← Challenge nonce ──────────────┤
@@ -1721,26 +1721,26 @@ BR2_PACKAGE_OPTEE_OS_ADDITIONAL_VARIABLES="CFG_TEE_CORE_LOG_LEVEL=3"
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SECURE BOOT HARDENING CHECKLIST                          │
 ├──────────────────────────────────────────────────────┬──────────────────────┤
-│  Item                                                │  Status             │
+│  Item                                                │  Status              │
 ├──────────────────────────────────────────────────────┼──────────────────────┤
-│  ROTPK burned to OTP eFUSE                           │  [ ] TODO / [x] OK  │
-│  Secure boot fuse blown (prevents bypass)            │  [ ] TODO / [x] OK  │
-│  JTAG disabled in production fuse                    │  [ ] TODO / [x] OK  │
-│  BL2 signed with ROT private key                     │  [ ] TODO / [x] OK  │
-│  BL31, BL32, BL33 all signed and verified            │  [ ] TODO / [x] OK  │
-│  FIT image signed (kernel + DTB)                     │  [ ] TODO / [x] OK  │
-│  U-Boot has NO interactive console in production     │  [ ] TODO / [x] OK  │
-│  U-Boot CONFIG_BOOTCOMMAND is locked (SHA-signed)    │  [ ] TODO / [x] OK  │
-│  OP-TEE CFG_RPMB_FS=y (eMMC replay-protected store) │  [ ] TODO / [x] OK  │
-│  OP-TEE CFG_CORE_ASLR=y                              │  [ ] TODO / [x] OK  │
-│  Linux kernel: CONFIG_INTEGRITY_PLATFORM_KEYRING=y   │  [ ] TODO / [x] OK  │
-│  Linux kernel: IMA/EVM enabled                       │  [ ] TODO / [x] OK  │
-│  Linux kernel: dm-verity on rootfs                   │  [ ] TODO / [x] OK  │
-│  Secure storage uses RPMB (hardware replay protect)  │  [ ] TODO / [x] OK  │
-│  Private keys NEVER leave HSM                        │  [ ] TODO / [x] OK  │
-│  Build server has no access to private keys          │  [ ] TODO / [x] OK  │
-│  Key rotation procedure documented & tested          │  [ ] TODO / [x] OK  │
-│  Anti-rollback counters enforced in eFUSE            │  [ ] TODO / [x] OK  │
+│  ROTPK burned to OTP eFUSE                           │  [ ] TODO / [x] OK   │
+│  Secure boot fuse blown (prevents bypass)            │  [ ] TODO / [x] OK   │
+│  JTAG disabled in production fuse                    │  [ ] TODO / [x] OK   │
+│  BL2 signed with ROT private key                     │  [ ] TODO / [x] OK   │
+│  BL31, BL32, BL33 all signed and verified            │  [ ] TODO / [x] OK   │
+│  FIT image signed (kernel + DTB)                     │  [ ] TODO / [x] OK   │
+│  U-Boot has NO interactive console in production     │  [ ] TODO / [x] OK   │
+│  U-Boot CONFIG_BOOTCOMMAND is locked (SHA-signed)    │  [ ] TODO / [x] OK   │
+│  OP-TEE CFG_RPMB_FS=y (eMMC replay-protected store)  │  [ ] TODO / [x] OK   │
+│  OP-TEE CFG_CORE_ASLR=y                              │  [ ] TODO / [x] OK   │
+│  Linux kernel: CONFIG_INTEGRITY_PLATFORM_KEYRING=y   │  [ ] TODO / [x] OK   │
+│  Linux kernel: IMA/EVM enabled                       │  [ ] TODO / [x] OK   │
+│  Linux kernel: dm-verity on rootfs                   │  [ ] TODO / [x] OK   │
+│  Secure storage uses RPMB (hardware replay protect)  │  [ ] TODO / [x] OK   │
+│  Private keys NEVER leave HSM                        │  [ ] TODO / [x] OK   │
+│  Build server has no access to private keys          │  [ ] TODO / [x] OK   │
+│  Key rotation procedure documented & tested          │  [ ] TODO / [x] OK   │
+│  Anti-rollback counters enforced in eFUSE            │  [ ] TODO / [x] OK   │
 └──────────────────────────────────────────────────────┴──────────────────────┘
 ```
 
@@ -1754,37 +1754,37 @@ relationships are:
 
 ```
   ┌─────────────────────────────────────────────────────────────────────────┐
-  │                       CHAPTER 14 — SUMMARY MAP                         │
+  │                       CHAPTER 14 — SUMMARY MAP                          │
   │                                                                         │
-  │  ┌───────────────┐   fuses →  ┌──────────────┐   signs →  ┌─────────┐ │
-  │  │  OEM Root CA  │            │ OTP / eFUSE  │            │  BL2   │ │
-  │  │ (offline HSM) │ ──────────►│  ROTPK hash  │ ─────────► │ binary │ │
-  │  └───────────────┘            └──────────────┘            └────┬────┘ │
-  │                                                                │       │
-  │                                                          loads & verifies
-  │                                                                │       │
-  │                                                                ▼       │
-  │  ┌───────────────────────────────────────────────────────────────────┐ │
-  │  │                  FIP.BIN  (Firmware Image Package)                │ │
-  │  │  BL31 (TF-A Mon.) │ BL32 (OP-TEE) │ BL33 (U-Boot)               │ │
-  │  │  all signed with SoC Firmware Key / Non-Trusted World Key        │ │
-  │  └────────────────────────────────────┬──────────────────────────────┘ │
-  │                                       │                                │
-  │              ┌────────────────────────┴──────────────────────┐        │
-  │              │                                               │        │
-  │              ▼                                               ▼        │
-  │  ┌──────────────────────────┐               ┌──────────────────────┐  │
-  │  │  OP-TEE (Secure World)   │               │  U-Boot (BL33)       │  │
-  │  │  • Trusted Applications  │               │  • Verifies FIT ITB  │  │
-  │  │  • Secure Storage(RPMB)  │               │  • Boots Linux       │  │
-  │  │  • Crypto Services       │               └──────────┬───────────┘  │
-  │  │  • Key Management        │                          │              │
-  │  └──────────────────────────┘                          ▼              │
-  │              ▲                               ┌─────────────────────┐  │
-  │              │ SMC / TEE Client API          │  Linux + OP-TEE drv │  │
-  │              └───────────────────────────────│  + optee-client     │  │
-  │                                              │  + Your CA/TA apps  │  │
-  │                                              └─────────────────────┘  │
+  │  ┌───────────────┐   fuses →  ┌──────────────┐   signs →  ┌─────────┐   │
+  │  │  OEM Root CA  │            │ OTP / eFUSE  │            │  BL2    │   │
+  │  │ (offline HSM) │ ──────────►│  ROTPK hash  │ ─────────► │ binary  │   │
+  │  └───────────────┘            └──────────────┘            └────┬────┘   │
+  │                                                                │        │
+  │                                                         loads & verifies│
+  │                                                                │        │
+  │                                                                ▼        │
+  │  ┌───────────────────────────────────────────────────────────────────┐  │
+  │  │                  FIP.BIN  (Firmware Image Package)                │  │
+  │  │  BL31 (TF-A Mon.) │ BL32 (OP-TEE) │ BL33 (U-Boot)                 │  │
+  │  │  all signed with SoC Firmware Key / Non-Trusted World Key         │  │
+  │  └────────────────────────────────────┬──────────────────────────────┘  │
+  │                                       │                                 │
+  │              ┌────────────────────────┴──────────────────────┐          │
+  │              │                                               │          │
+  │              ▼                                               ▼          │
+  │  ┌──────────────────────────┐               ┌──────────────────────┐    │
+  │  │  OP-TEE (Secure World)   │               │  U-Boot (BL33)       │    │
+  │  │  • Trusted Applications  │               │  • Verifies FIT ITB  │    │
+  │  │  • Secure Storage(RPMB)  │               │  • Boots Linux       │    │
+  │  │  • Crypto Services       │               └──────────┬───────────┘    │
+  │  │  • Key Management        │                          │                │
+  │  └──────────────────────────┘                          ▼                │
+  │              ▲                               ┌─────────────────────┐    │
+  │              │ SMC / TEE Client API          │  Linux + OP-TEE drv │    │
+  │              └───────────────────────────────│  + optee-client     │    │
+  │                                              │  + Your CA/TA apps  │    │
+  │                                              └─────────────────────┘    │
   └─────────────────────────────────────────────────────────────────────────┘
 ```
 

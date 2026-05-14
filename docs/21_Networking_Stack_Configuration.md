@@ -1,4 +1,4 @@
-Now let me create the comprehensive markdown document:Here's your comprehensive Buildroot Networking Stack Configuration document. It covers:
+# 21. Buildroot Networking Stack Configuration
 
 **Structure:**
 - Full ASCII architecture diagram showing the complete stack from hardware to application layer
@@ -14,8 +14,6 @@ Now let me create the comprehensive markdown document:Here's your comprehensive 
 - Kernel Kconfig fragment files with commentary
 - ASCII flow diagrams for wpa_supplicant handshake, connman/NM internal architectures, and the udev naming pipeline
 - A final ASCII summary map tying all five layers together
-
-# 21. Buildroot Networking Stack Configuration
 
 ---
 
@@ -69,7 +67,7 @@ Understanding how these layers interact is essential for creating robust embedde
             v                            v
 +------------------------------------------------------------------+
 |                    iproute2  (ip, ss, tc, bridge)                |
-|    Address mgmt  |  Routing  |  Traffic ctrl  |  Netlink cmds   |
+|    Address mgmt  |  Routing  |  Traffic ctrl  |  Netlink cmds    |
 +------------------------------------------------------------------+
                               |
             +-----------------+------------------+
@@ -83,14 +81,14 @@ Understanding how these layers interact is essential for creating robust embedde
             |
             v
 +------------------------------------------------------------------+
-|                    LINUX KERNEL                                   |
+|                    LINUX KERNEL                                  |
 |  +-------------------+  +---------------+  +----------------+    |
-|  | TCP/IP Stack       |  |   Netfilter   |  |  WiFi / cfg80211|  |
-|  | IPv4 / IPv6 / SCTP |  | iptables / nf |  |  mac80211 layer|  |
+|  | TCP/IP Stack      |  |   Netfilter   |  | WiFi / cfg80211|    |
+|  | IPv4 / IPv6 / SCTP|  | iptables / nf |  | mac80211 layer |    |
 |  +-------------------+  +---------------+  +----------------+    |
 |  +-------------------+  +---------------+                        |
-|  | Socket Families    |  | Network Devs  |                        |
-|  | AF_INET, AF_PACKET |  | Drivers/PHYs  |                        |
+|  | Socket Families   |  | Network Devs  |                        |
+|  | AF_INET, AF_PACKET|  | Drivers/PHYs  |                        |
 |  +-------------------+  +---------------+                        |
 +------------------------------------------------------------------+
                               |
@@ -416,12 +414,12 @@ IPv4.method = dhcp
 
 ```
 +------------------------------------------------------------------+
-|                          connman                                  |
+|                          connman                                 |
 |                                                                  |
-|   +-----------+   +-----------+   +-----------+   +----------+  |
-|   |  Ethernet |   |   WiFi    |   | Bluetooth |   |  VPN     |  |
-|   |  plugin   |   |  plugin   |   |  plugin   |   |  plugin  |  |
-|   +-----------+   +-----------+   +-----------+   +----------+  |
+|   +-----------+   +-----------+   +-----------+   +----------+   |
+|   |  Ethernet |   |   WiFi    |   | Bluetooth |   |  VPN     |   |
+|   |  plugin   |   |  plugin   |   |  plugin   |   |  plugin  |   |
+|   +-----------+   +-----------+   +-----------+   +----------+   |
 |         |               |                                        |
 |         v               v                                        |
 |   +-----------+   +-------------------+                          |
@@ -430,7 +428,7 @@ IPv4.method = dhcp
 |   +-----------+   +-------------------+                          |
 |                                                                  |
 |   +----------------------------------------------------------+   |
-|   |              D-Bus interface (net.connman.*)              |   |
+|   |              D-Bus interface (net.connman.*)             |   |
 |   +----------------------------------------------------------+   |
 +------------------------------------------------------------------+
        ^                   ^
@@ -515,15 +513,15 @@ nmcli dev wifi connect "SSID" password "pass"
 +------------------------------------------------------------------+
 |                       NetworkManager                             |
 |                                                                  |
-|  +---------+  +----------+  +----------+  +------------------+  |
-|  |  Device  |  | Device   |  | Device   |  | VPN/Bond/Bridge  |  |
-|  |  Ethernet|  | WiFi     |  | Modem    |  | Team / VLAN      |  |
-|  +---------+  +----------+  +----------+  +------------------+  |
-|       |             |              |                              |
-|       v             v              v                              |
+|  +---------+  +----------+  +----------+  +------------------+   |
+|  | Device  |  | Device   |  | Device   |  | VPN/Bond/Bridge  |   |
+|  | Ethernet|  | WiFi     |  | Modem    |  | Team / VLAN      |   |
+|  +---------+  +----------+  +----------+  +------------------+   |
+|       |             |              |                             |
+|       v             v              v                             |
 |  +---------+  +----------+  +---------------+                    |
-|  | Netlink  |  |wpa_supp. |  | ModemManager  |                   |
-|  | (kernel) |  |ctrl sock |  | (D-Bus)       |                   |
+|  | Netlink |  |wpa_supp. |  | ModemManager  |                    |
+|  | (kernel)|  |ctrl sock |  | (D-Bus)       |                    |
 |  +---------+  +----------+  +---------------+                    |
 |                                                                  |
 |  +----------------------------------------------------------+    |
@@ -1632,7 +1630,7 @@ fn main() {
   |  +-------------------------+  +----------------------------+    |
   |  | connman                 |  | NetworkManager             |    |
   |  | Lightweight, D-Bus      |  | Full-featured, D-Bus       |    |
-  |  | Plugins: WiFi/ETH/VPN   |  | NMcli/NMtui, bonds, VLANs |    |
+  |  | Plugins: WiFi/ETH/VPN   |  | NMcli/NMtui, bonds, VLANs  |    |
   |  | Ideal: small embedded   |  | Ideal: complex/desktop     |    |
   |  | BR2_PACKAGE_CONNMAN=y   |  | BR2_PACKAGE_NETWORKMANAGER |    |
   |  +-------------------------+  +----------------------------+    |
@@ -1646,13 +1644,13 @@ fn main() {
   |  +---------------------------------------------------------+    |
   |                                                                 |
   |  PROGRAMMING INTERFACES                                         |
-  |  +-------------------+  +-----------+  +-------------------+   |
-  |  | C                 |  | C++       |  | Rust              |   |
-  |  | AF_NETLINK socket |  | sdbus-c++ |  | rtnetlink crate   |   |
-  |  | RTM_GETLINK       |  | libnm     |  | tokio-udev crate  |   |
-  |  | wpa ctrl socket   |  | RAII NL   |  | UnixDatagram WPA  |   |
-  |  | udev uevent mon.  |  | wrappers  |  | std::process dhcp |   |
-  |  +-------------------+  +-----------+  +-------------------+   |
+  |  +-------------------+  +-----------+  +-------------------+    |
+  |  | C                 |  | C++       |  | Rust              |    |
+  |  | AF_NETLINK socket |  | sdbus-c++ |  | rtnetlink crate   |    |
+  |  | RTM_GETLINK       |  | libnm     |  | tokio-udev crate  |    |
+  |  | wpa ctrl socket   |  | RAII NL   |  | UnixDatagram WPA  |    |
+  |  | udev uevent mon.  |  | wrappers  |  | std::process dhcp |    |
+  |  +-------------------+  +-----------+  +-------------------+    |
   |                                                                 |
   +=================================================================+
 ```

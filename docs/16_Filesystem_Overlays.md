@@ -1,6 +1,4 @@
-Now I'll create the comprehensive markdown document:Here's what the document covers across its ~500 lines:
-
-**Structure of the document:**
+# 16. Filesystem Overlays in Buildroot
 
 - **Introduction** — why overlays exist and what problem they solve
 - **What Is a Filesystem Overlay?** — concept with ASCII merge diagram
@@ -24,7 +22,6 @@ Now I'll create the comprehensive markdown document:Here's what the document cov
 
 **Summary** — ASCII reference table covering build-time vs runtime layering, per-board strategies, key rules, and a language integration overview.
 
-# 16. Filesystem Overlays in Buildroot
 
 > **Topic:** `BR2_ROOTFS_OVERLAY` directories, merge order, overlayfs at runtime,
 > and managing per-board config differences.
@@ -288,7 +285,7 @@ Runtime OverlayFS layout:
 
   ┌──────────────────────────────────────────┐
   │            MERGED (mount point)          │
-  │   /mnt/root  ← what processes see       │
+  │   /mnt/root  ← what processes see        │
   └────────────────┬─────────────────────────┘
                    │
        ┌───────────┴────────────┐

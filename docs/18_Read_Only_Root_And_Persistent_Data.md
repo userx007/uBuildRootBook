@@ -195,7 +195,7 @@ mount -t overlay overlay \
 
 ```
 tmpfs   /tmp         tmpfs   defaults,nosuid,nodev,size=32m           0 0
-tmpfs   /run         tmpfs   defaults,nosuid,nodev,mode=0755,size=16m  0 0
+tmpfs   /run         tmpfs   defaults,nosuid,nodev,mode=0755,size=16m 0 0
 tmpfs   /var/log     tmpfs   defaults,nosuid,nodev,size=16m           0 0
 tmpfs   /var/tmp     tmpfs   defaults,nosuid,nodev,size=8m            0 0
 tmpfs   /var/cache   tmpfs   defaults,nosuid,nodev,size=8m            0 0

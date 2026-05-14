@@ -1,7 +1,5 @@
 # 19. Init Systems in Buildroot: BusyBox init, systemd, and OpenRC
 
----
-
 ## Table of Contents
 
 1. [Introduction](#introduction)
@@ -83,7 +81,7 @@ Power-on / Reset
  +---------+    +-----------+    +----------+
  | BusyBox |    |  systemd  |    |  OpenRC  |
  |  init   |    |           |    |          |
- | inittab |    | unit files|    | rc scripts|
+ | inittab |    | unit files|    |rc scripts|
  +---------+    +-----------+    +----------+
       |                |                |
       v                v                v
@@ -102,7 +100,7 @@ Power-on / Reset
              |         |
              |         +-- network.target ----+
              |         |                      |
-             |         +-- syslog.service      |
+             |         +-- syslog.service     |
              |         |                      v
              |         +-- myapp.service  [socket activated]
              |
@@ -178,7 +176,7 @@ BusyBox reads `/etc/inittab` at startup. Each line follows the format:
 
 | Field       | Meaning                                                              |
 |-------------|----------------------------------------------------------------------|
-| `id`        | Console device suffix (e.g. `ttyS0`) or a label                     |
+| `id`        | Console device suffix (e.g. `ttyS0`) or a label                      |
 | `runlevels` | Ignored by BusyBox init (SysV artefact)                              |
 | `action`    | One of the keywords below                                            |
 | `process`   | Command to execute                                                   |
@@ -1523,12 +1521,12 @@ AFTER optimisation (parallel background):
 ```
 t=0   |===== Kernel ======|
 t=300  |systemd PID1|
-t=310               |local-fs.target|
+t=310               |local-fs.target |
 t=320               |sysinit.target  |
-t=340                                |=syslog.service=|
+t=340                                |=syslog.service======|
 t=340                                |=network.service=====|
-t=340                                |=dbus.service===|
-t=400                                                 |=myapp.service=|READY
+t=340                                |=dbus.service========|
+t=400                                                      |=myapp.service=|READY
 ```
 
 ### OpenRC Optimisation

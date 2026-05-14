@@ -1,6 +1,4 @@
-Now I have what I need. Let me create the comprehensive markdown document.Here's a breakdown of what the document covers across its ~700 lines:
-
-**Structure**
+# 28. CI/CD Pipeline Integration (GitLab / GitHub Actions)
 
 The document follows the five core topics from the chapter spec, each treated in depth:
 
@@ -24,7 +22,6 @@ The document follows the five core topics from the chapter spec, each treated in
 
 All graphics are in ASCII art as requested.
 
-# 28. CI/CD Pipeline Integration (GitLab / GitHub Actions)
 
 ## Buildroot Embedded Systems Series — Chapter 28
 
@@ -67,7 +64,7 @@ The key pillars of a production-grade Buildroot CI/CD pipeline are:
 
 ```
 +-------------------------------------------------------------+
-|                  Developer Workstation                       |
+|                  Developer Workstation                      |
 |  git push / merge request / pull request                    |
 +-----------------------------+-------------------------------+
                               |
@@ -75,15 +72,15 @@ The key pillars of a production-grade Buildroot CI/CD pipeline are:
 +-------------------------------------------------------------+
 |              CI/CD Platform (GitLab / GitHub)               |
 |                                                             |
-|  +----------+   +----------+   +----------+   +----------+ |
-|  | Trigger  |-->|  Build   |-->|  Test    |-->| Promote  | |
-|  | Stage    |   |  Stage   |   |  Stage   |   |  Stage   | |
-|  +----------+   +----------+   +----------+   +----------+ |
-|        |              |              |              |        |
-|        v              v              v              v        |
-|   Checkout       dl/ cache      Run tests      Push to     |
-|   defconfig      ccache         legal-info     registry    |
-|   Docker pull    make -j N      artifact       artifact    |
+|  +----------+   +----------+   +----------+   +----------+  |
+|  | Trigger  |-->|  Build   |-->|  Test    |-->| Promote  |  |
+|  | Stage    |   |  Stage   |   |  Stage   |   |  Stage   |  |
+|  +----------+   +----------+   +----------+   +----------+  |
+|        |              |              |              |       |
+|        v              v              v              v       |
+|   Checkout       dl/ cache      Run tests      Push to      |
+|   defconfig      ccache         legal-info     registry     |
+|   Docker pull    make -j N      artifact       artifact     |
 +-------------------------------------------------------------+
                               |
                               v
@@ -2144,30 +2141,30 @@ CHAPTER 28 — CI/CD PIPELINE INTEGRATION: KEY CONCEPTS
   +-----------------------------------------------------------+
   |  CONCEPT            WHAT IT DOES           WHY IT MATTERS |
   +-----------------------------------------------------------+
-  |  dl/ caching        Persists downloaded     Cuts 45min     |
-  |                     source tarballs         to 2min on     |
-  |                     across CI runs          cache hit      |
+  |  dl/ caching        Persists downloaded     Cuts 45min    |
+  |                     source tarballs         to 2min on    |
+  |                     across CI runs          cache hit     |
   +-----------------------------------------------------------+
-  |  ccache             Caches compiler         10x speedup    |
-  |                     outputs by source       on incremental |
-  |                     file + flags hash       builds         |
+  |  ccache             Caches compiler         10x speedup   |
+  |                     outputs by source       on incremental|
+  |                     file + flags hash       builds        |
   +-----------------------------------------------------------+
-  |  -j$(nproc)         Parallel make jobs      Full CPU       |
-  |                     inside each package     utilisation    |
-  |                     build                   on any runner  |
+  |  -j$(nproc)         Parallel make jobs      Full CPU      |
+  |                     inside each package     utilisation   |
+  |                     build                   on any runner |
   +-----------------------------------------------------------+
-  |  Artifact           Promotes validated       What is tested |
-  |  promotion          builds through dev ->   is exactly     |
-  |                     staging -> production   what ships     |
+  |  Artifact           Promotes validated     What is tested |
+  |  promotion          builds through dev ->   is exactly    |
+  |                     staging -> production   what ships    |
   +-----------------------------------------------------------+
-  |  Docker containers  Identical host env      Reproducible   |
-  |                     for every runner        builds, no     |
-  |                     and developer           host pollution  |
+  |  Docker containers  Identical host env      Reproducible  |
+  |                     for every runner        builds, no    |
+  |                     and developer           host pollution|
   +-----------------------------------------------------------+
-  |  make legal-info    Scans all packages       Enforces OSS  |
-  |  gating             for license metadata,   license        |
-  |                     blocks non-compliant    compliance     |
-  |                     licenses                automatically  |
+  |  make legal-info    Scans all packages       Enforces OSS |
+  |  gating             for license metadata,   license       |
+  |                     blocks non-compliant    compliance    |
+  |                     licenses                automatically |
   +-----------------------------------------------------------+
 
   RECOMMENDED PIPELINE STRUCTURE

@@ -40,14 +40,14 @@ ASCII: Relationship between BSP Components
   +--------------------------------------------------+
   |              BR2_EXTERNAL Tree                   |
   |                                                  |
-  |  +------------+  +------------+  +-----------+  |
-  |  |   board/   |  |  configs/  |  | package/  |  |
-  |  |  myboard/  |  | myboard_   |  | mydriver/ |  |
-  |  |            |  | defconfig  |  |           |  |
-  |  | *.dts      |  +------------+  | Config.in |  |
-  |  | *.dtsi     |                  | mydriver  |  |
-  |  | *.dtbo     |  +------------+  | .mk       |  |
-  |  | patches/   |  |   linux/   |  +-----------+  |
+  |  +------------+  +------------+  +-----------+   |
+  |  |   board/   |  |  configs/  |  | package/  |   |
+  |  |  myboard/  |  | myboard_   |  | mydriver/ |   |
+  |  |            |  | defconfig  |  |           |   |
+  |  | *.dts      |  +------------+  | Config.in |   |
+  |  | *.dtsi     |                  | mydriver  |   |
+  |  | *.dtbo     |  +------------+  | .mk       |   |
+  |  | patches/   |  |   linux/   |  +-----------+   |
   |  | post-*.sh  |  | linux.conf |                  |
   |  +------------+  +------------+                  |
   +--------------------------------------------------+
@@ -101,11 +101,11 @@ ASCII: Device Tree Node Hierarchy
 
 | Property         | Type          | Example                              |
 |------------------|---------------|--------------------------------------|
-| `compatible`     | string-list   | `"vendor,device", "generic-fallback"` |
+| `compatible`     | string-list   | `"vendor,device", "generic-fallback"`|
 | `reg`            | u32 cells     | `<0x11002000 0x1000>`                |
 | `interrupts`     | u32 cells     | `<GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>`   |
 | `clocks`         | phandle+args  | `<&clk_sys CLK_UART0>`               |
-| `status`         | string        | `"okay"` or `"disabled"`            |
+| `status`         | string        | `"okay"` or `"disabled"`             |
 | `#address-cells` | u32           | `<1>`                                |
 | `#size-cells`    | u32           | `<1>`                                |
 
@@ -728,7 +728,7 @@ ASCII: DT Overlay Application Flow
   |     i2c0 {       |  --->  |   __overlay__ {  |
   |       status=    |  merge |     status=okay  |
   |         disabled |        |     sensor@1d {  |
-  |     }            |        |       compat=...  |
+  |     }            |        |       compat=... |
   +------------------+        +------------------+
           |                           |
           +----------+----------------+

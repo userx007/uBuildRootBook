@@ -43,27 +43,27 @@ The ASCII diagrams illustrate the overall build pipeline, the before/after of us
 
 ```
   ┌─────────────────────────────────────────────────────────────────┐
-  │                  Buildroot Build Pipeline                        │
+  │                  Buildroot Build Pipeline                       │
   │                                                                 │
   │  menuconfig / .config                                           │
   │       │                                                         │
   │       ▼                                                         │
-  │  ┌─────────────┐    ┌──────────────────┐    ┌───────────────┐  │
-  │  │  Toolchain  │───▶│  Package Build   │───▶│  Target Dir   │  │
-  │  └─────────────┘    └──────────────────┘    │  (output/     │  │
-  │                                             │   target/)    │  │
-  │  ┌──────────────────────────────────────┐   └──────┬────────┘  │
-  │  │  Root FS Configuration               │          │           │
-  │  │  ┌────────────────────────────────┐  │          ▼           │
-  │  │  │ BR2_ROOTFS_SKELETON_CUSTOM     │──┼──▶  Skeleton Copy    │
-  │  │  ├────────────────────────────────┤  │          │           │
-  │  │  │ BR2_ROOTFS_DEVICE_TABLE        │──┼──▶  Permissions Set  │
-  │  │  ├────────────────────────────────┤  │          │           │
-  │  │  │ BR2_ROOTFS_USERS_TABLES        │──┼──▶  Users Created    │
-  │  │  ├────────────────────────────────┤  │          │           │
-  │  │  │ BR2_ROOTFS_POST_BUILD_SCRIPT   │──┼──▶  Hook Scripts     │
-  │  │  └────────────────────────────────┘  │          │           │
-  │  └──────────────────────────────────────┘          ▼           │
+  │  ┌─────────────┐    ┌──────────────────┐    ┌───────────────┐   │
+  │  │  Toolchain  │───▶│  Package Build   │───▶│  Target Dir   │   │
+  │  └─────────────┘    └──────────────────┘    │  (output/     │   │
+  │                                             │   target/)    │   │
+  │  ┌──────────────────────────────────────┐   └──────┬────────┘   │
+  │  │  Root FS Configuration               │          │            │
+  │  │  ┌────────────────────────────────┐  │          ▼            │
+  │  │  │ BR2_ROOTFS_SKELETON_CUSTOM     │──┼──▶  Skeleton Copy     │
+  │  │  ├────────────────────────────────┤  │          │            │
+  │  │  │ BR2_ROOTFS_DEVICE_TABLE        │──┼──▶  Permissions Set   │
+  │  │  ├────────────────────────────────┤  │          │            │
+  │  │  │ BR2_ROOTFS_USERS_TABLES        │──┼──▶  Users Created     │
+  │  │  ├────────────────────────────────┤  │          │            │
+  │  │  │ BR2_ROOTFS_POST_BUILD_SCRIPT   │──┼──▶  Hook Scripts      │
+  │  │  └────────────────────────────────┘  │          │            │
+  │  └──────────────────────────────────────┘          ▼            │
   │                                             Final Root FS Image │
   └─────────────────────────────────────────────────────────────────┘
 ```
@@ -1291,7 +1291,7 @@ minor = 64
   ║  • POST_IMAGE_SCRIPT runs after image files exist (signing, …).  ║
   ║                                                                  ║
   ║  EXECUTION ORDER                                                 ║
-  ║  ───────────────                                                  ║
+  ║  ───────────────                                                 ║
   ║                                                                  ║
   ║  [1] Skeleton copy                                               ║
   ║       │                                                          ║
@@ -1310,15 +1310,15 @@ minor = 64
   ╠══════════════════════════════════════════════════════════════════╣
   ║  Key Rules                                                       ║
   ║  ──────────                                                      ║
-  ║  ✔  Pin UIDs/GIDs numerically — never rely on auto-assign in     ║
+  ║  +  Pin UIDs/GIDs numerically — never rely on auto-assign in     ║
   ║     production. Reproducible images require deterministic IDs.   ║
-  ║  ✔  Device table is the only safe way to chown in a rootfs.      ║
-  ║  ✔  Keep post-build scripts idempotent — they may run on an      ║
+  ║  +  Device table is the only safe way to chown in a rootfs.      ║
+  ║  +  Keep post-build scripts idempotent — they may run on an      ║
   ║     already-populated target dir after a partial rebuild.        ║
-  ║  ✔  Validate mandatory files in post-build to catch missing       ║
+  ║  +  Validate mandatory files in post-build to catch missing      ║
   ║     package installs before the image is written.                ║
-  ║  ✗  Do NOT use sudo inside post-build scripts.                   ║
-  ║  ✗  Do NOT hardcode absolute host paths in scripts; use $1/$2.   ║
+  ║  -  Do NOT use sudo inside post-build scripts.                   ║
+  ║  -  Do NOT hardcode absolute host paths in scripts; use $1/$2.   ║
   ╚══════════════════════════════════════════════════════════════════╝
 ```
 
